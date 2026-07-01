@@ -1,0 +1,51 @@
+package io.base14.scout.core
+
+data class ScoutConfig(
+    val serviceName: String,
+    val endpoint: String,
+    val serviceVersion: String? = null,
+    val environment: String? = null,
+    val headers: Map<String, String> = emptyMap(),
+    val resourceAttributes: Map<String, String> = emptyMap(),
+
+    val sessionSampleRate: Double = 1.0,
+    val alwaysCaptureErrors: Boolean = true,
+
+    val sessionTimeoutMinutes: Int = 30,
+    val maxSessionDurationMinutes: Int = 60,
+
+    val firstPartyHosts: List<String> = emptyList(),
+    val ignoreUrlPatterns: List<String> = emptyList(),
+
+    val enableScreenTracking: Boolean = true,
+    val enableTapTracking: Boolean = true,
+    val enableHttpTracking: Boolean = true,
+    val enableErrorTracking: Boolean = true,
+    val enableCrashTracking: Boolean = true,
+    val enableAnrTracking: Boolean = true,
+    val enableJankTracking: Boolean = true,
+    val enableLifecycleTracking: Boolean = true,
+    val enableStartupTracking: Boolean = true,
+    val enableLogging: Boolean = true,
+    val enableMetrics: Boolean = true,
+
+    val anrThresholdMs: Long = 5_000,
+    val longTaskThresholdMs: Long = 100,
+    val frozenFrameThresholdMs: Long = 700,
+
+    val maxOfflineStorageMb: Int = 5,
+
+    val role: ScoutRole = ScoutRole.AUTO,
+
+    val beforeSend: ((name: String, attributes: MutableMap<String, Any>) -> Boolean)? = null,
+
+    val debugLogging: Boolean = false,
+) {
+    init {
+        require(serviceName.isNotBlank()) { "ScoutConfig.serviceName must not be blank" }
+        require(endpoint.isNotBlank()) { "ScoutConfig.endpoint must not be blank" }
+        require(sessionSampleRate in 0.0..100.0) { "sessionSampleRate must be 0..100" }
+    }
+}
+
+enum class ScoutRole { AUTO, OWNER, ATTACHED }

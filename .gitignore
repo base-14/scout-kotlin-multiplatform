@@ -1,0 +1,41 @@
+# Gradle
+.gradle/
+build/
+**/build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Kotlin
+.kotlin/
+
+# Android
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+release/
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+*.hprof
+
+# macOS
+.DS_Store
+
+# Xcode / iOS (future scout-ios)
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+Pods/
+
+# Logs & tmp
+*.log
+
+# Claude Code local settings
+.claude/settings.local.json
