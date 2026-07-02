@@ -12,8 +12,8 @@ val enableIos = providers.gradleProperty("scout.enableIos").orNull == "true"
 kotlin {
     compilerOptions {
         // Emit metadata consumable by Kotlin 2.0+ apps (matches opentelemetry-kotlin's floor).
-        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
-        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
         optIn.add("io.opentelemetry.kotlin.ExperimentalApi")
         optIn.add("io.opentelemetry.kotlin.semconv.IncubatingApi")
     }
@@ -59,10 +59,12 @@ kotlin {
             implementation(libs.androidx.annotation)
         }
         if (enableIos) {
-            named("iosMain") {
-                dependencies {
-                    implementation(libs.ktor.client.cio)
-                }
+            val iosMain = maybeCreate("iosMain")
+            iosMain.dependsOn(getByName("commonMain"))
+            getByName("iosArm64Main").dependsOn(iosMain)
+            getByName("iosSimulatorArm64Main").dependsOn(iosMain)
+            iosMain.dependencies {
+                implementation(libs.ktor.client.cio)
             }
         }
     }

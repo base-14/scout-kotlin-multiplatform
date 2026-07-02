@@ -137,13 +137,14 @@ class ScoutInstrumentedTest {
         assertNotNull("crash replay did not export", req)
         val body = req!!.body.readUtf8()
 
-        assertContains(body, "\"name\":\"error\"")
         assertContains(body, "\"name\":\"app_crash\"")
+        assertTrue("crash replay must emit a single app_crash span, not a duplicate error span", !body.contains("\"name\":\"error\""))
         assertContains(body, "dead-session-xyz")
         assertContains(body, "2020-01-01T00:00:00.000Z")
         assertContains(body, "error.stack_trace")
         assertContains(body, "com.example.Foo.bar")
         assertContains(body, "\"unhandled\"")
+        assertContains(body, "\"jvm_crash\"")
         assertContains(body, "error.time_since_app_start_ms")
         assertContains(body, "1234")
     }

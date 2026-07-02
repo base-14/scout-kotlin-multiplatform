@@ -28,11 +28,13 @@ release/
 # macOS
 .DS_Store
 
-# Xcode / iOS (future scout-ios)
+# Xcode / iOS / SwiftPM
 xcuserdata/
 *.xcworkspace/xcuserdata/
 DerivedData/
 Pods/
+.build/
+.swiftpm/
 
 # Logs & tmp
 *.log

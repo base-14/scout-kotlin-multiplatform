@@ -37,6 +37,7 @@ fun HostScreen(
     onNativeException: () -> Unit,
     onHttpCall: () -> Unit,
     onOpenFlutter: () -> Unit,
+    onNavigate: (String) -> Unit,
 ) {
     MaterialTheme {
         Scaffold { padding ->
@@ -84,6 +85,22 @@ fun HostScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Open Flutter Screen")
+                }
+
+                Text(
+                    text = "NATIVE SCREENS",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TriggerButton("Dashboard", Color(0xFF455A64)) { onNavigate("dashboard") }
+                    TriggerButton("Details", Color(0xFF455A64)) { onNavigate("details") }
+                    TriggerButton("Settings", Color(0xFF455A64)) { onNavigate("settings") }
+                    TriggerButton("Profile", Color(0xFF455A64)) { onNavigate("profile") }
                 }
             }
         }

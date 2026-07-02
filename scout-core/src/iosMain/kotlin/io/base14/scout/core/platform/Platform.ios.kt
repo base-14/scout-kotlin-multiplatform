@@ -1,6 +1,8 @@
 package io.base14.scout.core.platform
 
 import platform.Foundation.NSDate
+import platform.Foundation.NSISO8601DateFormatWithFractionalSeconds
+import platform.Foundation.NSISO8601DateFormatWithInternetDateTime
 import platform.Foundation.NSISO8601DateFormatter
 import platform.Foundation.NSRecursiveLock
 import platform.Foundation.NSUUID
@@ -13,6 +15,8 @@ actual fun epochMillis(): Long = (NSDate().timeIntervalSince1970 * 1_000.0).toLo
 
 actual fun isoUtc(epochMillis: Long): String {
     val formatter = NSISO8601DateFormatter()
+    formatter.formatOptions =
+        NSISO8601DateFormatWithInternetDateTime or NSISO8601DateFormatWithFractionalSeconds
     return formatter.stringFromDate(NSDate.dateWithTimeIntervalSince1970(epochMillis / 1_000.0))
 }
 

@@ -1,11 +1,11 @@
 [versions]
-# Pinned to match the broad Android consumer ecosystem (Gradle 8.11 / AGP 8.7 / Kotlin 2.1),
-# so the published SDK is consumable by stock apps (e.g. architecture-samples) and composite builds.
-kotlin = "2.1.10"
+# Kotlin 2.3 is required for the Kotlin/Native iOS build: opentelemetry-kotlin ships its iOS
+# klibs built with Kotlin 2.3.x (klib ABI is compiler-version-locked, unlike JVM jars), so
+# scout-core must compile with a 2.3 toolchain to consume them. apiVersion/languageVersion stay
+# at 2.1 for source-level consumer compatibility; only the stdlib floor moves to 2.3.
+kotlin = "2.3.21"
 agp = "8.7.3"
 otelKotlin = "0.4.0"
-# Pinned to a Kotlin 2.1-era set so the published SDK is consumable by Kotlin 2.1+ apps
-# (ktor 3.5/serialization 1.11 force a Kotlin 2.3 stdlib floor; 3.2.3/1.8.0 stay on 2.1).
 coroutines = "1.10.1"
 serialization = "1.8.0"
 ktor = "3.2.3"
@@ -41,6 +41,7 @@ okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-encoding = { module = "io.ktor:ktor-client-encoding", version.ref = "ktor" }
 
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }

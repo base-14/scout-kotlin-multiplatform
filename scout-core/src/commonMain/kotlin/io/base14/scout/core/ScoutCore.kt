@@ -42,6 +42,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okio.Path
 import okio.Path.Companion.toPath
+import kotlin.concurrent.Volatile
 
 class ScoutCore(
     val config: ScoutConfig,
@@ -432,29 +433,16 @@ class ScoutCore(
         val obj = runCatching { crashJson.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return
         val attrs = LinkedHashMap<String, Any>()
         for ((k, v) in obj) attrs[k] = v.jsonPrimitive.content
+        val type = attrs[ScoutAttributes.ERROR_TYPE]?.toString()
         val message = attrs[ScoutAttributes.ERROR_MESSAGE]?.toString()
-
-        if (attrs.containsKey(ScoutAttributes.ERROR_STACK_TRACE)) {
-            val errorAttrs = LinkedHashMap<String, Any>()
-            errorAttrs[ScoutAttributes.ERROR_ID] = randomUuidString()
-            attrs[ScoutAttributes.ERROR_TYPE]?.let { errorAttrs[ScoutAttributes.ERROR_TYPE] = it }
-            attrs[ScoutAttributes.ERROR_MESSAGE]?.let { errorAttrs[ScoutAttributes.ERROR_MESSAGE] = it }
-            attrs[ScoutAttributes.ERROR_STACK_TRACE]?.let { errorAttrs[ScoutAttributes.ERROR_STACK_TRACE] = it }
-            errorAttrs[ScoutAttributes.ERROR_HANDLED] = "false"
-            errorAttrs[ScoutAttributes.ERROR_HANDLING] = "unhandled"
-            errorAttrs[ScoutAttributes.ERROR_SOURCE_TYPE] = "android"
-            attrs[ScoutAttributes.ERROR_FINGERPRINT]?.let { errorAttrs[ScoutAttributes.ERROR_FINGERPRINT] = it }
-            attrs[ScoutAttributes.ERROR_TIME_SINCE_APP_START_MS]?.let { errorAttrs[ScoutAttributes.ERROR_TIME_SINCE_APP_START_MS] = it }
-            attrs[ScoutAttributes.CRASH_LAST_SCREEN]?.let { errorAttrs[ScoutAttributes.SCREEN_NAME] = it }
-            attrs[ScoutAttributes.BREADCRUMBS]?.let { errorAttrs[ScoutAttributes.BREADCRUMBS] = it }
-            attrs[ScoutAttributes.SESSION_ID]?.let { errorAttrs[ScoutAttributes.SESSION_ID] = it }
-            attrs[ScoutAttributes.SESSION_START_TIME]?.let { errorAttrs[ScoutAttributes.SESSION_START_TIME] = it }
-            attrs[ScoutAttributes.SESSION_SAMPLE_RATE]?.let { errorAttrs[ScoutAttributes.SESSION_SAMPLE_RATE] = it }
-            emitSpan(ScoutSpans.ERROR, errorAttrs, status = StatusData.Error(message))
-        }
-
-        attrs.remove(ScoutAttributes.ERROR_STACK_TRACE)
-        emitSpan(ScoutSpans.APP_CRASH, attrs, status = StatusData.Error(message))
+        attrs[ScoutAttributes.ERROR_ID] = randomUuidString()
+        attrs[ScoutAttributes.ERROR_HANDLED] = "false"
+        attrs[ScoutAttributes.ERROR_HANDLING] = "unhandled"
+        attrs[ScoutAttributes.ERROR_SOURCE_TYPE] = "android"
+        attrs[ScoutAttributes.CRASH_TYPE] = "jvm_crash"
+        attrs[ScoutAttributes.CRASH_LAST_SCREEN]?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
+        val statusMessage = message?.takeIf { it.isNotBlank() } ?: type ?: "app crash"
+        emitSpan(ScoutSpans.APP_CRASH, attrs, status = StatusData.Error(statusMessage))
         jvmCrashCapturedThisLaunch = true
     }
 

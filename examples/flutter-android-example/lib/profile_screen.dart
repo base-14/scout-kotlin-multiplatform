@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'demo_screens.dart';
 import 'native_bridge.dart';
 
 /// The Flutter half of the hybrid demo. Mirrors the `_SdkTestButtons` panel in
@@ -111,6 +112,42 @@ class ProfileScreen extends StatelessWidget {
                       // Crosses the channel to trigger a native JVM crash.
                       NativeBridge.simulateNativeCrash();
                     },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'FLUTTER SCREENS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.push(context, demoRoute(const FeedScreen(), '/feed')),
+                    child: const Text('Feed'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.push(context, demoRoute(const CartScreen(), '/cart')),
+                    child: const Text('Cart'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.push(context, demoRoute(const SearchScreen(), '/search')),
+                    child: const Text('Search'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.push(context, demoRoute(const AccountScreen(), '/account')),
+                    child: const Text('Account'),
                   ),
                 ],
               ),
