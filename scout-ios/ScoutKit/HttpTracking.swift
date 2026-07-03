@@ -17,11 +17,66 @@ enum HttpTracking {
         guard !installed else { return }
         installed = true
         URLProtocol.registerClass(ScoutURLProtocol.self)
-        guard
-            let original = class_getInstanceMethod(URLSessionConfiguration.self, #selector(getter: URLSessionConfiguration.protocolClasses)),
-            let replacement = class_getInstanceMethod(URLSessionConfiguration.self, #selector(URLSessionConfiguration.scout_protocolClasses))
-        else { return }
-        method_exchangeImplementations(original, replacement)
+        // Custom URLSession(configuration:) sessions: inject the protocol via configuration.
+        swizzle(URLSessionConfiguration.self,
+                #selector(getter: URLSessionConfiguration.protocolClasses),
+                #selector(URLSessionConfiguration.scout_protocolClasses))
+        // URLSession.shared ignores protocols, so wrap its completion-handler dataTasks directly.
+        swizzle(URLSession.self,
+                NSSelectorFromString("dataTaskWithRequest:completionHandler:"),
+                #selector(URLSession.scout_dataTask(with:completionHandler:)))
+        swizzle(URLSession.self,
+                NSSelectorFromString("dataTaskWithURL:completionHandler:"),
+                #selector(URLSession.scout_dataTaskURL(with:completionHandler:)))
+    }
+
+    private static func swizzle(_ cls: AnyClass, _ original: Selector, _ replacement: Selector) {
+        guard let o = class_getInstanceMethod(cls, original),
+              let r = class_getInstanceMethod(cls, replacement) else { return }
+        method_exchangeImplementations(o, r)
+    }
+
+    static func nowEpochNanos() -> Int64 { Int64(Date().timeIntervalSince1970 * 1_000_000_000) }
+
+    static func record(request: URLRequest, response: URLResponse?, error: Error?, startEpochNanos: Int64) {
+        guard let url = request.url else { return }
+        if let host = url.host,
+           let collectorHost = URL(string: ScoutEngine.shared.collectorEndpoint)?.host,
+           host == collectorHost { return }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? (error == nil ? 0 : -1)
+        ScoutEngine.shared.reportHttp(
+            method: request.httpMethod ?? "GET",
+            url: url.absoluteString,
+            statusCode: Int64(status),
+            startEpochNanos: startEpochNanos,
+            endEpochNanos: nowEpochNanos()
+        )
+    }
+}
+
+extension URLSession {
+    @objc func scout_dataTask(with request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask {
+        // Only the shared session; custom sessions are covered by ScoutURLProtocol.
+        guard self === URLSession.shared else {
+            return self.scout_dataTask(with: request, completionHandler: completionHandler)
+        }
+        let start = HttpTracking.nowEpochNanos()
+        return self.scout_dataTask(with: request, completionHandler: { data, response, error in
+            HttpTracking.record(request: request, response: response, error: error, startEpochNanos: start)
+            completionHandler(data, response, error)
+        })
+    }
+
+    @objc func scout_dataTaskURL(with url: URL, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask {
+        guard self === URLSession.shared else {
+            return self.scout_dataTaskURL(with: url, completionHandler: completionHandler)
+        }
+        let request = URLRequest(url: url)
+        let start = HttpTracking.nowEpochNanos()
+        return self.scout_dataTaskURL(with: url, completionHandler: { data, response, error in
+            HttpTracking.record(request: request, response: response, error: error, startEpochNanos: start)
+            completionHandler(data, response, error)
+        })
     }
 }
 

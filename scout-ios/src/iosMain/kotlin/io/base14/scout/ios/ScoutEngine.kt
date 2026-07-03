@@ -57,8 +57,12 @@ object ScoutEngine {
         instrumentation = IosInstrumentation(created, processStartNanos).also { it.start() }
     }
 
+    private var currentScreenSpan: ScoutCore.ScoutSpan? = null
+
     fun setScreen(name: String) {
-        core?.emit(
+        val c = core ?: return
+        currentScreenSpan?.end()
+        currentScreenSpan = c.beginScreen(
             name = ScoutSpans.SCREEN_VIEW,
             attributes = mapOf(
                 ScoutAttributes.SCREEN_NAME to name,

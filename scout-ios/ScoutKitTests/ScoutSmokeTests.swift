@@ -36,6 +36,13 @@ final class ScoutSmokeTests: XCTestCase {
         }.resume()
         wait(for: [exp], timeout: 30)
 
+        // URLSession.shared coverage (via the dataTask swizzle, not URLProtocol).
+        let expShared = expectation(description: "http-shared")
+        URLSession.shared.dataTask(with: URL(string: "https://example.org")!) { _, _, _ in
+            expShared.fulfill()
+        }.resume()
+        wait(for: [expShared], timeout: 30)
+
         // Let the batch span/log exporters flush to the collector.
         Thread.sleep(forTimeInterval: 25)
     }
