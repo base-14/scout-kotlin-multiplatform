@@ -24,6 +24,7 @@ final class ScoutSmokeTests: XCTestCase {
         Scout.logEvent("ios_smoke_event")
         Scout.setUser("ios-tester-1")
         Scout.addBreadcrumb(type: "test", message: "smoke breadcrumb")
+        Scout.reportError(NSError(domain: "SmokeDomain", code: 42, userInfo: [NSLocalizedDescriptionKey: "handled smoke error"]))
         Scout.setScreen("SmokeDetail")
 
         let exp = expectation(description: "http")

@@ -4,6 +4,7 @@ import io.base14.scout.core.ScoutConfig
 import io.base14.scout.core.ScoutCore
 import io.base14.scout.core.export.ScoutLogLevel
 import io.base14.scout.core.platform.epochNanos
+import io.base14.scout.core.platform.randomUuidString
 import io.base14.scout.core.semantics.ScoutAttributes
 import io.base14.scout.core.semantics.ScoutSpans
 import io.ktor.client.HttpClient
@@ -104,6 +105,52 @@ object ScoutEngine {
                 "anr.main_thread_stack" to mainThreadStack,
             ),
             errorMessage = "Application Not Responding",
+        )
+    }
+
+    fun reportError(type: String, message: String, stackTrace: String) {
+        core?.emit(
+            name = ScoutSpans.ERROR,
+            attributes = mapOf(
+                ScoutAttributes.ERROR_ID to randomUuidString(),
+                ScoutAttributes.ERROR_TYPE to type,
+                ScoutAttributes.ERROR_MESSAGE to message,
+                ScoutAttributes.ERROR_STACK_TRACE to stackTrace,
+                ScoutAttributes.ERROR_HANDLED to "true",
+                ScoutAttributes.ERROR_HANDLING to "handled",
+                ScoutAttributes.ERROR_SOURCE_TYPE to "ios",
+            ),
+            errorMessage = message.ifEmpty { type },
+        )
+    }
+
+    fun emitGauge(name: String, value: Double, unit: String) {
+        core?.emitGauge(name, value, unit)
+    }
+
+    fun reportLongTask(durationMs: Long) {
+        core?.emit(
+            name = ScoutSpans.LONG_TASK,
+            attributes = mapOf(ScoutAttributes.LONG_TASK_DURATION to durationMs.toString()),
+        )
+    }
+
+    fun reportFrozenFrame(durationMs: Long) {
+        core?.emit(
+            name = ScoutSpans.FROZEN_FRAME,
+            attributes = mapOf(ScoutAttributes.FROZEN_FRAME_DURATION to durationMs.toString()),
+        )
+    }
+
+    fun reportTap(target: String, targetType: String, x: Double, y: Double) {
+        core?.emit(
+            name = ScoutSpans.USER_INTERACTION,
+            attributes = mapOf(
+                ScoutAttributes.UI_TARGET to target,
+                ScoutAttributes.UI_TARGET_TYPE to targetType,
+                ScoutAttributes.UI_TARGET_X to x.toString(),
+                ScoutAttributes.UI_TARGET_Y to y.toString(),
+            ),
         )
     }
 
