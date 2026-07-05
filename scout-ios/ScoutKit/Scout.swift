@@ -55,10 +55,87 @@ public enum Scout {
             stackTrace: stackTrace.joined(separator: "\n")
         )
     }
-    public static func logInfo(_ message: String) { ScoutEngine.shared.logInfo(message: message) }
-    public static func logError(_ message: String) { ScoutEngine.shared.logError(message: message) }
-    public static func logEvent(_ name: String) { ScoutEngine.shared.logEvent(name: name) }
-    public static func setUser(_ id: String?) { ScoutEngine.shared.setUser(id: id) }
+    // MARK: Logs
+    public static func logInfo(_ message: String, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.logInfo(message: message)
+            : ScoutEngine.shared.logInfo(message: message, attributes: attributes)
+    }
+    public static func logError(_ message: String, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.logError(message: message)
+            : ScoutEngine.shared.logError(message: message, attributes: attributes)
+    }
+    public static func logWarning(_ message: String, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.logWarning(message: message)
+            : ScoutEngine.shared.logWarning(message: message, attributes: attributes)
+    }
+    public static func logDebug(_ message: String, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.logDebug(message: message)
+            : ScoutEngine.shared.logDebug(message: message, attributes: attributes)
+    }
+    public static func logEvent(_ name: String, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.logEvent(name: name)
+            : ScoutEngine.shared.logEvent(name: name, attributes: attributes)
+    }
+
+    // MARK: User / identity
+    public static func setUser(id: String?, attributes: [String: String] = [:]) {
+        attributes.isEmpty ? ScoutEngine.shared.setUser(id: id)
+            : ScoutEngine.shared.setUser(id: id, attributes: attributes)
+    }
+    public static func setUserAttributes(_ attributes: [String: String]) {
+        ScoutEngine.shared.setUserAttributes(attributes: attributes)
+    }
+    public static func clearUser() { ScoutEngine.shared.clearUser() }
+
+    // MARK: Session / account / feature flags
+    public static func setSessionAttributes(_ attributes: [String: String]) {
+        ScoutEngine.shared.setSessionAttributes(attributes: attributes)
+    }
+    public static func clearSessionAttributes() { ScoutEngine.shared.clearSessionAttributes() }
+    public static func setAccount(id: String, name: String? = nil) {
+        ScoutEngine.shared.setAccount(id: id, name: name)
+    }
+    public static func clearAccount() { ScoutEngine.shared.clearAccount() }
+    public static func setFeatureFlag(name: String, value: String) {
+        ScoutEngine.shared.setFeatureFlag(name: name, value: value)
+    }
+    public static func clearFeatureFlags() { ScoutEngine.shared.clearFeatureFlags() }
+
+    // MARK: Timings / vitals / operations
+    public static func addTiming(_ name: String) { ScoutEngine.shared.addTiming(name: name) }
+    public static func startVital(_ name: String) { ScoutEngine.shared.startVital(name: name) }
+    public static func endVital(_ name: String, description: String? = nil) {
+        ScoutEngine.shared.endVital(name: name, description: description)
+    }
+    public static func recordOperationStep(name: String, step: String, key: String? = nil, failureReason: String? = nil) {
+        ScoutEngine.shared.recordOperationStep(name: name, step: step, key: key, failureReason: failureReason)
+    }
+
+    // MARK: Manual spans (network / long task / interaction / metric)
+    public static func reportHttp(method: String, url: String, statusCode: Int, startEpochNanos: Int64, endEpochNanos: Int64) {
+        ScoutEngine.shared.reportHttp(method: method, url: url, statusCode: Int64(statusCode),
+                                      startEpochNanos: startEpochNanos, endEpochNanos: endEpochNanos)
+    }
+    public static func reportLongTask(durationMs: Int64) { ScoutEngine.shared.reportLongTask(durationMs: durationMs) }
+    public static func reportTap(target: String, targetType: String, x: Double, y: Double) {
+        ScoutEngine.shared.reportTap(target: target, targetType: targetType, x: x, y: y)
+    }
+    public static func emitGauge(name: String, value: Double, unit: String) {
+        ScoutEngine.shared.emitGauge(name: name, value: value, unit: unit)
+    }
+
+    // MARK: Screen load / view session / custom span
+    public static func recordScreenLoad(name: String, durationMs: Int64) {
+        ScoutEngine.shared.recordScreenLoad(name: name, durationMs: durationMs)
+    }
+    public static func recordViewSession(name: String, durationMs: Int64) {
+        ScoutEngine.shared.recordViewSession(name: name, durationMs: durationMs)
+    }
+    public static func recordSpan(name: String, durationMs: Int64, attributes: [String: String] = [:]) {
+        ScoutEngine.shared.recordSpan(name: name, durationMs: durationMs, attributes: attributes)
+    }
+
+    // MARK: Breadcrumbs
     public static func addBreadcrumb(type: String, message: String) {
         ScoutEngine.shared.addBreadcrumb(type: type, message: message)
     }

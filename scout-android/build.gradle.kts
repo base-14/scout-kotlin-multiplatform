@@ -92,7 +92,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "io.base14"
                 artifactId = "scout-android"
-                version = "0.1.17"
+                version = "0.1.19"
             }
         }
     }

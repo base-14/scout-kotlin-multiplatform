@@ -11,6 +11,8 @@ import io.base14.scout.android.internal.createScoutHttpClient
 import io.base14.scout.core.ScoutConfig
 import io.base14.scout.core.ScoutCore
 import io.base14.scout.core.export.ScoutLogLevel
+import io.base14.scout.core.semantics.ScoutAttributes
+import io.base14.scout.core.semantics.ScoutSpans
 
 object Scout {
     @Volatile
@@ -209,6 +211,88 @@ object Scout {
         failureReason: String? = null,
     ) {
         core?.recordOperationStep(name, step, key, failureReason)
+    }
+
+    @JvmStatic
+    fun reportHttp(
+        method: String,
+        url: String,
+        statusCode: Long,
+        startEpochNanos: Long,
+        endEpochNanos: Long,
+    ) {
+        core?.emit(
+            name = ScoutSpans.HTTP_REQUEST,
+            attributes = mapOf(
+                ScoutAttributes.HTTP_METHOD to method,
+                ScoutAttributes.URL_FULL to url,
+                ScoutAttributes.HTTP_STATUS_CODE to statusCode.toString(),
+            ),
+            startNanos = startEpochNanos,
+            endNanos = endEpochNanos,
+            isClient = true,
+        )
+    }
+
+    @JvmStatic
+    fun reportLongTask(durationMs: Long) {
+        core?.emit(
+            name = ScoutSpans.LONG_TASK,
+            attributes = mapOf(ScoutAttributes.LONG_TASK_DURATION to durationMs.toString()),
+        )
+    }
+
+    @JvmStatic
+    fun reportTap(
+        target: String,
+        targetType: String,
+        x: Double,
+        y: Double,
+    ) {
+        core?.emit(
+            name = ScoutSpans.USER_INTERACTION,
+            attributes = mapOf(
+                ScoutAttributes.UI_TARGET to target,
+                ScoutAttributes.UI_TARGET_TYPE to targetType,
+                ScoutAttributes.UI_TARGET_X to x.toString(),
+                ScoutAttributes.UI_TARGET_Y to y.toString(),
+            ),
+        )
+    }
+
+    @JvmStatic
+    fun emitGauge(
+        name: String,
+        value: Double,
+        unit: String,
+    ) {
+        core?.emitGauge(name, value, unit)
+    }
+
+    @JvmStatic
+    fun recordScreenLoad(
+        name: String,
+        durationMs: Long,
+    ) {
+        core?.recordScreenLoad(name, durationMs)
+    }
+
+    @JvmStatic
+    fun recordViewSession(
+        name: String,
+        durationMs: Long,
+    ) {
+        core?.recordViewSession(name, durationMs)
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun recordSpan(
+        name: String,
+        durationMs: Long,
+        attributes: Map<String, Any> = emptyMap(),
+    ) {
+        core?.recordSpan(name, durationMs, attributes)
     }
 
     internal fun coreInternal(): ScoutCore? = core

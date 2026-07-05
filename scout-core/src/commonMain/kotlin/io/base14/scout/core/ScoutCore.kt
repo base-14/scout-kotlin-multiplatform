@@ -394,6 +394,40 @@ class ScoutCore(
         emitSpan("operation_step", attrs)
     }
 
+    /** Manually record how long a screen took to load (e.g. navigation → first content). */
+    fun recordScreenLoad(name: String, durationMs: Long) {
+        val end = epochNanos()
+        emitSpan(
+            ScoutSpans.SCREEN_LOAD,
+            mapOf(
+                ScoutAttributes.SCREEN_NAME to name,
+                ScoutAttributes.SCREEN_LOAD_TIME to durationMs,
+            ),
+            startNanos = end - durationMs * 1_000_000L,
+            endNanos = end,
+        )
+    }
+
+    /** Manually record how long the user spent on a screen/view (dwell time). */
+    fun recordViewSession(name: String, durationMs: Long) {
+        val end = epochNanos()
+        emitSpan(
+            ScoutSpans.VIEW_SESSION,
+            mapOf(
+                ScoutAttributes.SCREEN_NAME to name,
+                ScoutAttributes.VIEW_TIME_SPENT to durationMs,
+            ),
+            startNanos = end - durationMs * 1_000_000L,
+            endNanos = end,
+        )
+    }
+
+    /** Manually record a custom span of a given duration with arbitrary attributes. */
+    fun recordSpan(name: String, durationMs: Long, attributes: Map<String, Any> = emptyMap()) {
+        val end = epochNanos()
+        emitSpan(name, attributes, startNanos = end - durationMs * 1_000_000L, endNanos = end)
+    }
+
     private val crashJson = Json { ignoreUnknownKeys = true }
 
     @Volatile

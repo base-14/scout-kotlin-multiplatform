@@ -23,19 +23,43 @@ internal object ComposeTapResolver {
         val ly = (screenY - loc[1]).toFloat()
 
         val root = runCatching { owner.rootSemanticsNode }.getOrNull() ?: return null
-        var best: SemanticsNode? = null
+
+        // Deepest interactive (clickable) node under the point — the real tap target — and the
+        // deepest node that carries a label of its own. A clickable row/card is usually interactive
+        // but has no label itself (its text lives in child nodes), so we track both.
+        var interactive: SemanticsNode? = null
+        var labeled: SemanticsNode? = null
+
+        fun contains(node: SemanticsNode): Boolean {
+            val b = runCatching { node.boundsInRoot }.getOrNull() ?: return false
+            return lx >= b.left && lx <= b.right && ly >= b.top && ly <= b.bottom
+        }
 
         fun visit(node: SemanticsNode) {
-            val b = runCatching { node.boundsInRoot }.getOrNull() ?: return
-            if (lx < b.left || lx > b.right || ly < b.top || ly > b.bottom) return
-            if (isInteractive(node.config) || labelOf(node.config) != null) best = node
+            if (!contains(node)) return
+            if (isInteractive(node.config)) interactive = node
+            if (labelOf(node.config) != null) labeled = node
             for (child in runCatching { node.children }.getOrDefault(emptyList())) visit(child)
         }
         runCatching { visit(root) }
 
-        val node = best ?: return null
-        val label = labelOf(node.config) ?: return null
-        return ComposeTapTarget(label, roleOf(node.config))
+        // Prefer the clickable target; name it from itself, else from any labeled descendant,
+        // else from the nearest labeled node under the point, else its role.
+        val target = interactive ?: labeled ?: return null
+        val label = labelOf(target.config)
+            ?: firstDescendantLabel(target)
+            ?: labeled?.let { labelOf(it.config) }
+            ?: roleOf(target.config)
+        return ComposeTapTarget(label, roleOf(target.config))
+    }
+
+    /** First non-blank label found anywhere in this node's subtree (depth-first). */
+    private fun firstDescendantLabel(node: SemanticsNode): String? {
+        labelOf(node.config)?.let { return it }
+        for (child in runCatching { node.children }.getOrDefault(emptyList())) {
+            firstDescendantLabel(child)?.let { return it }
+        }
+        return null
     }
 
     private fun semanticsOwner(view: View): SemanticsOwner? {
