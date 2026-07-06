@@ -58,9 +58,16 @@ object ScoutEngine {
     }
 
     private var currentScreenSpan: ScoutCore.ScoutSpan? = null
+    private var currentScreenName: String? = null
+
+    // Live breadcrumb trail for the current session; previous-session trail (survives a crash).
+    private fun breadcrumbsJson(): String = core?.breadcrumbs?.toJson() ?: "[]"
+    private fun previousBreadcrumbsJson(): String = core?.breadcrumbs?.previousSessionJson ?: "[]"
 
     fun setScreen(name: String) {
         val c = core ?: return
+        currentScreenName = name
+        c.addBreadcrumb("navigation", name)
         currentScreenSpan?.end()
         currentScreenSpan = c.beginScreen(
             name = ScoutSpans.SCREEN_VIEW,
@@ -89,30 +96,55 @@ object ScoutEngine {
             endNanos = endEpochNanos,
             isClient = true,
         )
+        core?.addBreadcrumb("http", "$method $url")
     }
 
     fun reportNativeCrash(attributes: Map<String, String>) {
+        val attrs = LinkedHashMap<String, Any>(attributes)
+        // The crash killed the previous session, so use that session's persisted breadcrumb trail.
+        attrs[ScoutAttributes.BREADCRUMBS] = previousBreadcrumbsJson()
+        core?.lastPersistedScreenName()?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         core?.emit(
             name = ScoutSpans.NATIVE_CRASH,
-            attributes = attributes,
+            attributes = attrs,
             errorMessage = attributes[ScoutAttributes.ERROR_MESSAGE] ?: "native crash",
         )
     }
 
+    /** App-level crash span (parity with Android's app_crash), emitted from the drained crash report. */
+    fun reportAppCrash(attributes: Map<String, String>) {
+        val attrs = LinkedHashMap<String, Any>(attributes)
+        attrs[ScoutAttributes.ERROR_ID] = randomUuidString()
+        attrs[ScoutAttributes.ERROR_HANDLED] = "false"
+        attrs[ScoutAttributes.ERROR_HANDLING] = "unhandled"
+        attrs[ScoutAttributes.ERROR_SOURCE_TYPE] = "ios"
+        attrs[ScoutAttributes.BREADCRUMBS] = previousBreadcrumbsJson()
+        core?.lastPersistedScreenName()?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
+        core?.emit(
+            name = ScoutSpans.APP_CRASH,
+            attributes = attrs,
+            errorMessage = attributes[ScoutAttributes.ERROR_MESSAGE] ?: "app crash",
+        )
+    }
+
     fun reportAnr(durationMs: Long, mainThreadStack: String) {
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.CRASH_TYPE] = "anr"
+        attrs[ScoutAttributes.ERROR_MESSAGE] = "Application Not Responding"
+        attrs["anr.duration_ms"] = durationMs.toString()
+        attrs["anr.main_thread_stack"] = mainThreadStack
+        attrs[ScoutAttributes.BREADCRUMBS] = breadcrumbsJson()
+        currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         core?.emit(
             name = ScoutSpans.ANR,
-            attributes = mapOf(
-                ScoutAttributes.CRASH_TYPE to "anr",
-                ScoutAttributes.ERROR_MESSAGE to "Application Not Responding",
-                "anr.duration_ms" to durationMs.toString(),
-                "anr.main_thread_stack" to mainThreadStack,
-            ),
+            attributes = attrs,
             errorMessage = "Application Not Responding",
         )
     }
 
     fun reportError(type: String, message: String, stackTrace: String) {
+        // Record the error as a breadcrumb first, then attach the trail (matches scout-flutter).
+        core?.addBreadcrumb("error", message.ifEmpty { type })
         core?.emit(
             name = ScoutSpans.ERROR,
             attributes = mapOf(
@@ -123,6 +155,7 @@ object ScoutEngine {
                 ScoutAttributes.ERROR_HANDLED to "true",
                 ScoutAttributes.ERROR_HANDLING to "handled",
                 ScoutAttributes.ERROR_SOURCE_TYPE to "ios",
+                ScoutAttributes.BREADCRUMBS to breadcrumbsJson(),
             ),
             errorMessage = message.ifEmpty { type },
         )
@@ -133,17 +166,17 @@ object ScoutEngine {
     }
 
     fun reportLongTask(durationMs: Long) {
-        core?.emit(
-            name = ScoutSpans.LONG_TASK,
-            attributes = mapOf(ScoutAttributes.LONG_TASK_DURATION to durationMs.toString()),
-        )
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.LONG_TASK_DURATION] = durationMs.toString()
+        currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
+        core?.emit(name = ScoutSpans.LONG_TASK, attributes = attrs)
     }
 
     fun reportFrozenFrame(durationMs: Long) {
-        core?.emit(
-            name = ScoutSpans.FROZEN_FRAME,
-            attributes = mapOf(ScoutAttributes.FROZEN_FRAME_DURATION to durationMs.toString()),
-        )
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.FROZEN_FRAME_DURATION] = durationMs.toString()
+        currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
+        core?.emit(name = ScoutSpans.FROZEN_FRAME, attributes = attrs)
     }
 
     fun reportTap(target: String, targetType: String, x: Double, y: Double) {
@@ -156,6 +189,7 @@ object ScoutEngine {
                 ScoutAttributes.UI_TARGET_Y to y.toString(),
             ),
         )
+        core?.addBreadcrumb("tap", target)
     }
 
     fun logInfo(message: String) = core?.log(ScoutLogLevel.INFO, message) ?: Unit

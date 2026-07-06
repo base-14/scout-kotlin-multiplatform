@@ -43,7 +43,14 @@ enum ScoutCrashReporter {
             if attrs["error.message"] == nil {
                 attrs["error.message"] = attrs["crash.reason"] ?? "native crash"
             }
+            if attrs["error.type"] == nil {
+                attrs["error.type"] = attrs["crash.mach_exception"] ?? attrs["crash.signal"]
+                    ?? attrs["crash.type"] ?? "crash"
+            }
+            // native_crash carries the low-level detail; app_crash is the app-level event (parity
+            // with Android) with error.type/message + breadcrumbs.
             ScoutEngine.shared.reportNativeCrash(attributes: attrs)
+            ScoutEngine.shared.reportAppCrash(attributes: attrs)
         }
     }
 
