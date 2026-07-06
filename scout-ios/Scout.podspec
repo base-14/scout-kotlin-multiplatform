@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'Scout'
-  s.version          = '0.1.19'
+  s.version          = '0.1.0'
   s.summary          = 'Scout RUM SDK for iOS (OpenTelemetry-based).'
   s.description       = 'Real User Monitoring for iOS: screens, HTTP, crashes, ANRs, vitals, ' \
                         'logs — a thin Swift layer (ScoutKit) over a shared Kotlin/Native engine.'
