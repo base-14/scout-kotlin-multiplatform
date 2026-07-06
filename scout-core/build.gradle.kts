@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidKmpLibrary)
     alias(libs.plugins.kotlinSerialization)
-    `maven-publish`
+    alias(libs.plugins.mavenPublish)
 }
 
 // iOS targets are gated so the default (Android) build/publish never needs the Kotlin/Native
@@ -23,7 +23,7 @@ kotlin {
     androidLibrary {
         namespace = "io.base14.scout.core"
         compileSdk = 35
-        minSdk = 21
+        minSdk = 26
     }
 
     if (enableIos) {
@@ -66,6 +66,38 @@ kotlin {
             iosMain.dependencies {
                 implementation(libs.ktor.client.cio)
             }
+        }
+    }
+}
+
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    // Sign only when a key is configured (CI), so local publishToMavenLocal still works.
+    if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+        signAllPublications()
+    }
+    coordinates("io.base14", "scout-core", version.toString())
+    pom {
+        name.set("Scout Core")
+        description.set("Scout RUM — shared Kotlin Multiplatform engine (OpenTelemetry-based).")
+        url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("base-14")
+                name.set("base14")
+                url.set("https://base14.io")
+            }
+        }
+        scm {
+            url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+            connection.set("scm:git:git://github.com/base-14/scout-kotlin-multiplatform.git")
+            developerConnection.set("scm:git:ssh://git@github.com/base-14/scout-kotlin-multiplatform.git")
         }
     }
 }

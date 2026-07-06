@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description       = 'Real User Monitoring for iOS: screens, HTTP, crashes, ANRs, vitals, ' \
                         'logs — a thin Swift layer (ScoutKit) over a shared Kotlin/Native engine.'
   s.homepage         = 'https://github.com/base-14/scout-kotlin-multiplatform'
-  s.license          = { :type => 'Apache-2.0', :file => '../LICENSE' }
+  s.license          = { :type => 'MIT', :file => '../LICENSE' }
   s.author           = 'Base14'
   s.platform         = :ios, '13.0'
   s.swift_version    = '5.9'

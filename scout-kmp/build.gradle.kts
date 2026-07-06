@@ -18,7 +18,7 @@ kotlin {
     androidLibrary {
         namespace = "io.base14.scout.kmp"
         compileSdk = 35
-        minSdk = 21
+        minSdk = 26
     }
 
     if (enableIos) {

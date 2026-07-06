@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.kotlinAndroid)
-    `maven-publish`
+    alias(libs.plugins.mavenPublish)
 }
 
 kotlin {
@@ -18,7 +18,7 @@ android {
     ndkVersion = "27.1.12297006"
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -30,12 +30,6 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
-        }
-    }
-
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
         }
     }
 
@@ -85,15 +79,33 @@ dependencies {
     androidTestImplementation(libs.kotlinx.coroutines)
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            register<MavenPublication>("release") {
-                from(components["release"])
-                groupId = "io.base14"
-                artifactId = "scout-android"
-                version = "0.1.0"
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+        signAllPublications()
+    }
+    coordinates("io.base14", "scout-android", version.toString())
+    pom {
+        name.set("Scout Android")
+        description.set("Scout RUM SDK for Android — auto-instrumentation + OpenTelemetry export.")
+        url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
             }
+        }
+        developers {
+            developer {
+                id.set("base-14")
+                name.set("base14")
+                url.set("https://base14.io")
+            }
+        }
+        scm {
+            url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+            connection.set("scm:git:git://github.com/base-14/scout-kotlin-multiplatform.git")
+            developerConnection.set("scm:git:ssh://git@github.com/base-14/scout-kotlin-multiplatform.git")
         }
     }
 }
