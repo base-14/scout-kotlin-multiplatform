@@ -2,8 +2,18 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    `maven-publish`
+    alias(libs.plugins.mavenPublish)
 }
+
+// Release pins scout-core to a published Maven version (gradle.properties `scout.coreVersion`) so an
+// ios-only release re-publishes nothing but itself. Only active with -Prelease; local builds use
+// project(":scout-core") so source changes flow through immediately.
+val coreDependency: Any =
+    if (providers.gradleProperty("release").isPresent) {
+        "io.base14:scout-core:${providers.gradleProperty("scout.coreVersion").get()}"
+    } else {
+        project(":scout-core")
+    }
 
 kotlin {
     compilerOptions {
@@ -19,18 +29,48 @@ kotlin {
         target.binaries.framework {
             baseName = "Scout"
             isStatic = true
-            export(project(":scout-core"))
+            export(coreDependency)
             xcf.add(this)
         }
     }
 
     sourceSets {
         iosMain.dependencies {
-            api(project(":scout-core"))
+            api(coreDependency)
             implementation(libs.ktor.client.darwin)
         }
     }
 }
 
 group = "io.base14"
-version = "0.1.0"
+
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+        signAllPublications()
+    }
+    coordinates("io.base14", "scout-ios", version.toString())
+    pom {
+        name.set("Scout iOS Engine")
+        description.set("Scout RUM — Kotlin/Native iOS engine (consumed by KMP apps; Swift apps use the Scout Swift package).")
+        url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("base-14")
+                name.set("base14")
+                url.set("https://base14.io")
+            }
+        }
+        scm {
+            url.set("https://github.com/base-14/scout-kotlin-multiplatform")
+            connection.set("scm:git:git://github.com/base-14/scout-kotlin-multiplatform.git")
+            developerConnection.set("scm:git:ssh://git@github.com/base-14/scout-kotlin-multiplatform.git")
+        }
+    }
+}

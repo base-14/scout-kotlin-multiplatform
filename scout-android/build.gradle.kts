@@ -50,8 +50,18 @@ android {
     }
 }
 
+// Release pins scout-core to a published Maven version (gradle.properties `scout.coreVersion`) so an
+// android-only release re-publishes nothing but itself. Only active with -Prelease; local builds use
+// project(":scout-core") so source changes flow through immediately.
+val coreDependency: Any =
+    if (providers.gradleProperty("release").isPresent) {
+        "io.base14:scout-core:${providers.gradleProperty("scout.coreVersion").get()}"
+    } else {
+        project(":scout-core")
+    }
+
 dependencies {
-    api(project(":scout-core"))
+    api(coreDependency)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.process)
