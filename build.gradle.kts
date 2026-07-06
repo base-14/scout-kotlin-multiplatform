@@ -11,7 +11,9 @@ plugins {
 
 allprojects {
     group = "io.base14"
-    version = "0.1.0"
+    // Release version comes from the git tag with its SDK prefix stripped (e.g. android-0.1.2 ->
+    // 0.1.2), passed by CI as -PreleaseVersion=<version>. Falls back to a default for local builds.
+    version = (findProperty("releaseVersion") as String?)?.takeIf { it.isNotBlank() } ?: "0.1.0"
 }
 
 subprojects {

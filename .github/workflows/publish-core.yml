@@ -1,0 +1,49 @@
+name: Publish Core
+
+# Tag `core-<version>` (e.g. core-0.1.1) to publish the shared engine to Maven Central with ALL
+# variants (android, jvm, iosArm64, iosSimulatorArm64). The `core-` prefix is stripped.
+#   io.base14:scout-core   (self-contained — no internal dependencies to pin)
+#
+# This is the base everything else pins to: scout-android / scout-ios / scout-kmp reference a
+# published scout-core version instead of re-publishing it. Runs on macOS because the iOS
+# Kotlin/Native klibs can only be built there.
+# Secrets: MAVEN_CENTRAL_PUBLISH_USERNAME/PASSWORD, GPG_SIGNING_KEY/PASSWORD
+on:
+  push:
+    tags:
+      - 'core-[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK + CMake (scout-android native crash handler, built by make ci)
+        run: sdkmanager "ndk;27.1.12297006" "cmake;3.22.1"
+
+      - name: Derive release version (strip core- prefix)
+        run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#core-}" >> "$GITHUB_ENV"
+
+      # Gate: format check + lint + tests + build. Nothing publishes if this fails.
+      - name: Run CI (make ci)
+        run: make ci
+
+      - name: Publish scout-core (all variants) to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_PUBLISH_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PUBLISH_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_SIGNING_PASSWORD }}
+        run: >-
+          ./gradlew :scout-core:publishAndReleaseToMavenCentral
+          -Pscout.enableIos=true -PreleaseVersion="$RELEASE_VERSION" --no-configuration-cache
