@@ -54,6 +54,8 @@ object ScoutEngine {
             platformResourceAttributes = iosResourceAttributes(),
         )
         core = created
+        IosDynamicAttributes.enableMonitoring()
+        created.dynamicAttributesProvider = { IosDynamicAttributes.collect() }
         instrumentation = IosInstrumentation(created, processStartNanos).also { it.start() }
     }
 
