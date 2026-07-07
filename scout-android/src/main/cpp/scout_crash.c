@@ -158,10 +158,9 @@ static void scout_hex(const unsigned char *bytes, size_t len, char *out, size_t 
     out[j] = '\0';
 }
 
-static int scout_image_cb(struct dl_phdr_info *info, size_t size, void *data) {
-    (void) size;
-    int fd = *(int *) data;
-    char build_id[64] = "";
+// Extract the NT_GNU_BUILD_ID (as hex) from one loaded image's PT_NOTE segments.
+static void scout_build_id_of(struct dl_phdr_info *info, char *build_id, size_t build_id_sz) {
+    build_id[0] = '\0';
     for (int i = 0; i < info->dlpi_phnum; i++) {
         const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
         if (ph->p_type != PT_NOTE) continue;
@@ -172,13 +171,19 @@ static int scout_image_cb(struct dl_phdr_info *info, size_t size, void *data) {
             const char *name = p + sizeof(ElfW(Nhdr));
             const unsigned char *desc = (const unsigned char *) (name + ((nh->n_namesz + 3) & ~3));
             if (nh->n_type == NT_GNU_BUILD_ID && nh->n_namesz == 4 && memcmp(name, "GNU", 3) == 0) {
-                scout_hex(desc, nh->n_descsz, build_id, sizeof(build_id));
-                break;
+                scout_hex(desc, nh->n_descsz, build_id, build_id_sz);
+                return;
             }
             p = (const char *) desc + ((nh->n_descsz + 3) & ~3);
         }
-        if (build_id[0]) break;
     }
+}
+
+static int scout_image_cb(struct dl_phdr_info *info, size_t size, void *data) {
+    (void) size;
+    int fd = *(int *) data;
+    char build_id[64];
+    scout_build_id_of(info, build_id, sizeof(build_id));
     const char *name = (info->dlpi_name && info->dlpi_name[0]) ? info->dlpi_name : "app_process";
     char line[1100];
     int n = snprintf(line, sizeof(line), "%s 0x%lx %s\n", name,
@@ -238,4 +243,32 @@ Java_io_base14_scout_android_instrumentation_NativeCrashHandler_nativeInstall(JN
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     for (int i = 0; i < SCOUT_NUM_SIGNALS; i++) sigaction(g_signals[i], &sa, &g_old[i]);
+}
+
+// ---- ndk.build_id: build-id of the SDK's own native library ----
+typedef struct {
+    const char *needle;
+    char *out;
+    size_t out_sz;
+    int found;
+} scout_bid_ctx;
+
+static int scout_bid_cb(struct dl_phdr_info *info, size_t size, void *data) {
+    (void) size;
+    scout_bid_ctx *ctx = (scout_bid_ctx *) data;
+    const char *name = info->dlpi_name ? info->dlpi_name : "";
+    if (strstr(name, ctx->needle) == NULL) return 0;
+    scout_build_id_of(info, ctx->out, ctx->out_sz);
+    ctx->found = 1;
+    return 1; // stop iteration once found
+}
+
+JNIEXPORT jstring JNICALL
+Java_io_base14_scout_android_instrumentation_NativeLibInfo_nativeBuildId(JNIEnv *env, jobject thiz) {
+    (void) thiz;
+    char build_id[64] = "";
+    scout_bid_ctx ctx = {"libscout_crash.so", build_id, sizeof(build_id), 0};
+    dl_iterate_phdr(scout_bid_cb, &ctx);
+    if (!ctx.found || build_id[0] == '\0') return NULL;
+    return (*env)->NewStringUTF(env, build_id);
 }
