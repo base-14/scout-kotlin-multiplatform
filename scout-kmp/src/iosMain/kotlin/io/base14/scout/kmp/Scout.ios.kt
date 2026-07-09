@@ -75,7 +75,7 @@ actual object Scout {
     }
 
     actual fun reportHttp(method: String, url: String, statusCode: Long, startEpochNanos: Long, endEpochNanos: Long) {
-        ScoutEngine.reportHttp(method, url, statusCode, startEpochNanos, endEpochNanos)
+        ScoutEngine.reportHttp(method, url, statusCode, -1L, null, startEpochNanos, endEpochNanos)
     }
     actual fun reportLongTask(durationMs: Long) {
         ScoutEngine.reportLongTask(durationMs)
