@@ -112,8 +112,9 @@ public enum Scout {
     }
 
     // MARK: Manual spans (network / long task / interaction / metric)
-    public static func reportHttp(method: String, url: String, statusCode: Int, startEpochNanos: Int64, endEpochNanos: Int64) {
+    public static func reportHttp(method: String, url: String, statusCode: Int, responseSize: Int = -1, errorMessage: String? = nil, startEpochNanos: Int64, endEpochNanos: Int64) {
         ScoutEngine.shared.reportHttp(method: method, url: url, statusCode: Int64(statusCode),
+                                      responseSize: Int64(responseSize), errorMessage: errorMessage,
                                       startEpochNanos: startEpochNanos, endEpochNanos: endEpochNanos)
     }
     public static func reportLongTask(durationMs: Int64) { ScoutEngine.shared.reportLongTask(durationMs: durationMs) }

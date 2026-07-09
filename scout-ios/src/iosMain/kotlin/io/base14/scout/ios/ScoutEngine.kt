@@ -2,6 +2,7 @@ package io.base14.scout.ios
 
 import io.base14.scout.core.ScoutConfig
 import io.base14.scout.core.ScoutCore
+import io.base14.scout.core.bridge.BridgeCodec
 import io.base14.scout.core.export.ScoutLogLevel
 import io.base14.scout.core.platform.epochNanos
 import io.base14.scout.core.platform.randomUuidString
@@ -33,6 +34,19 @@ object ScoutEngine {
         headers: Map<String, String>,
         sessionSampleRate: Double,
     ) {
+        configure(serviceName, endpoint, environment, headers, sessionSampleRate, true, true, true)
+    }
+
+    fun configure(
+        serviceName: String,
+        endpoint: String,
+        environment: String?,
+        headers: Map<String, String>,
+        sessionSampleRate: Double,
+        enableScreenTracking: Boolean,
+        enableTapTracking: Boolean,
+        enableStartupTracking: Boolean,
+    ) {
         initialize(
             ScoutConfig(
                 serviceName = serviceName,
@@ -40,6 +54,9 @@ object ScoutEngine {
                 environment = environment,
                 headers = headers,
                 sessionSampleRate = sessionSampleRate,
+                enableScreenTracking = enableScreenTracking,
+                enableTapTracking = enableTapTracking,
+                enableStartupTracking = enableStartupTracking,
             ),
         )
     }
@@ -55,12 +72,19 @@ object ScoutEngine {
         )
         core = created
         IosDynamicAttributes.enableMonitoring()
-        created.dynamicAttributesProvider = { IosDynamicAttributes.collect() }
+        created.dynamicAttributesProvider = {
+            val m = IosDynamicAttributes.collect().toMutableMap()
+            currentScreenName?.let { m[ScoutAttributes.SCREEN_NAME] = it }
+            m
+        }
         instrumentation = IosInstrumentation(created, processStartNanos).also { it.start() }
     }
 
     private var currentScreenSpan: ScoutCore.ScoutSpan? = null
     private var currentScreenName: String? = null
+    private var screenEnterNanos: Long = 0
+    private var lastTapNanos: Long? = null
+    private var fbcEmitted: Boolean = false
 
     // Live breadcrumb trail for the current session; previous-session trail (survives a crash).
     private fun breadcrumbsJson(): String = core?.breadcrumbs?.toJson() ?: "[]"
@@ -68,37 +92,94 @@ object ScoutEngine {
 
     fun setScreen(name: String) {
         val c = core ?: return
+        val previous = currentScreenName
+        val nowNanos = epochNanos()
+        if (c.config.enableScreenTracking) {
+            if (previous != null) {
+                val timeSpentMs = (nowNanos - screenEnterNanos) / 1_000_000L
+                c.emit(
+                    ScoutSpans.VIEW_SESSION,
+                    mapOf(
+                        ScoutAttributes.SCREEN_NAME to previous,
+                        ScoutAttributes.VIEW_TIME_SPENT to (timeSpentMs / 1000.0).toString(),
+                    ),
+                )
+            }
+            if (!fbcEmitted) {
+                fbcEmitted = true
+                val fbcMs = (nowNanos - processStartNanos) / 1_000_000L
+                c.emit(
+                    ScoutSpans.APP_VITAL,
+                    mapOf(
+                        ScoutAttributes.VITAL_NAME to "fbc",
+                        ScoutAttributes.VITAL_TYPE to "startup",
+                        ScoutAttributes.VITAL_DURATION to (fbcMs / 1000.0).toString(),
+                        ScoutAttributes.VITAL_DURATION_MS to fbcMs,
+                    ),
+                )
+            }
+            val tapNanos = lastTapNanos
+            if (previous != null && tapNanos != null && (nowNanos - tapNanos) in 0..5_000_000_000L) {
+                val invMs = (nowNanos - tapNanos) / 1_000_000L
+                c.emit(
+                    ScoutSpans.APP_VITAL,
+                    mapOf(
+                        ScoutAttributes.VITAL_NAME to "inv",
+                        ScoutAttributes.VITAL_TYPE to "navigation",
+                        ScoutAttributes.VITAL_DURATION to (invMs / 1000.0).toString(),
+                        ScoutAttributes.VITAL_DURATION_MS to invMs,
+                        ScoutAttributes.VITAL_FROM_SCREEN to previous,
+                        ScoutAttributes.VITAL_TO_SCREEN to name,
+                    ),
+                )
+            }
+            currentScreenSpan?.end()
+            val attrs = LinkedHashMap<String, Any>()
+            attrs[ScoutAttributes.SCREEN_NAME] = name
+            attrs[ScoutAttributes.VIEW_ID] = randomUuidString()
+            attrs[ScoutAttributes.VIEW_LOADING_TYPE] = if (previous == null) "initial_load" else "route_change"
+            attrs[ScoutAttributes.VIEW_IS_ACTIVE] = true
+            previous?.let { attrs[ScoutAttributes.VIEW_REFERRER] = it }
+            currentScreenSpan = c.beginScreen(name = ScoutSpans.SCREEN_VIEW, attributes = attrs)
+        }
+        lastTapNanos = null
+        screenEnterNanos = nowNanos
         currentScreenName = name
         c.addBreadcrumb("navigation", name)
-        currentScreenSpan?.end()
-        currentScreenSpan = c.beginScreen(
-            name = ScoutSpans.SCREEN_VIEW,
-            attributes = mapOf(
-                ScoutAttributes.SCREEN_NAME to name,
-                ScoutAttributes.VIEW_LOADING_TYPE to "initial_load",
-            ),
-        )
     }
 
     fun reportHttp(
         method: String,
         url: String,
         statusCode: Long,
+        responseSize: Long,
+        errorMessage: String?,
         startEpochNanos: Long,
         endEpochNanos: Long,
     ) {
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.HTTP_METHOD] = method
+        attrs[ScoutAttributes.URL_FULL] = url
+        attrs[ScoutAttributes.HTTP_STATUS_CODE] = statusCode.toString()
+        attrs[ScoutAttributes.HTTP_BODY_SIZE] = (if (responseSize < 0) 0 else responseSize).toString()
+        attrs[ScoutAttributes.HTTP_DURATION_MS] = ((endEpochNanos - startEpochNanos) / 1_000_000L).toString()
+        attrs[ScoutAttributes.HTTP_ROUTE] = routeOf(url)
+        errorMessage?.takeIf { it.isNotEmpty() }?.let { attrs[ScoutAttributes.HTTP_ERROR] = it }
         core?.emit(
             name = ScoutSpans.HTTP_REQUEST,
-            attributes = mapOf(
-                ScoutAttributes.HTTP_METHOD to method,
-                ScoutAttributes.URL_FULL to url,
-                ScoutAttributes.HTTP_STATUS_CODE to statusCode.toString(),
-            ),
+            attributes = attrs,
             startNanos = startEpochNanos,
             endNanos = endEpochNanos,
+            errorMessage = errorMessage?.takeIf { it.isNotEmpty() },
             isClient = true,
         )
         core?.addBreadcrumb("http", "$method $url")
+    }
+
+    private fun routeOf(url: String): String {
+        val afterScheme = url.substringAfter("://", url)
+        val path = afterScheme.substringAfter("/", "").substringBefore("?").substringBefore("#")
+        return if (path.isEmpty()) "/" else "/$path"
     }
 
     fun reportNativeCrash(attributes: Map<String, String>) {
@@ -133,8 +214,9 @@ object ScoutEngine {
         val attrs = LinkedHashMap<String, Any>()
         attrs[ScoutAttributes.CRASH_TYPE] = "anr"
         attrs[ScoutAttributes.ERROR_MESSAGE] = "Application Not Responding"
-        attrs["anr.duration_ms"] = durationMs.toString()
-        attrs["anr.main_thread_stack"] = mainThreadStack
+        attrs[ScoutAttributes.ANR_DURATION] = (durationMs / 1000.0).toString()
+        attrs[ScoutAttributes.ANR_THRESHOLD] = ((core?.config?.anrThresholdMs ?: 5000L) / 1000.0).toString()
+        attrs[ScoutAttributes.ANR_MAIN_THREAD_STACK] = mainThreadStack
         attrs[ScoutAttributes.BREADCRUMBS] = breadcrumbsJson()
         currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         core?.emit(
@@ -169,14 +251,15 @@ object ScoutEngine {
 
     fun reportLongTask(durationMs: Long) {
         val attrs = LinkedHashMap<String, Any>()
-        attrs[ScoutAttributes.LONG_TASK_DURATION] = durationMs.toString()
+        attrs[ScoutAttributes.LONG_TASK_DURATION] = (durationMs / 1000.0).toString()
+        attrs[ScoutAttributes.LONG_TASK_THRESHOLD] = ((core?.config?.longTaskThresholdMs ?: 100L) / 1000.0).toString()
         currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         core?.emit(name = ScoutSpans.LONG_TASK, attributes = attrs)
     }
 
     fun reportFrozenFrame(durationMs: Long) {
         val attrs = LinkedHashMap<String, Any>()
-        attrs[ScoutAttributes.FROZEN_FRAME_DURATION] = durationMs.toString()
+        attrs[ScoutAttributes.FROZEN_FRAME_DURATION] = (durationMs / 1000.0).toString()
         currentScreenName?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         core?.emit(name = ScoutSpans.FROZEN_FRAME, attributes = attrs)
     }
@@ -185,13 +268,24 @@ object ScoutEngine {
         core?.emit(
             name = ScoutSpans.USER_INTERACTION,
             attributes = mapOf(
+                ScoutAttributes.UI_ID to randomUuidString(),
+                ScoutAttributes.UI_TYPE to "tap",
                 ScoutAttributes.UI_TARGET to target,
                 ScoutAttributes.UI_TARGET_TYPE to targetType,
+                ScoutAttributes.UI_TARGET_NAME_SOURCE to "accessibility",
+                ScoutAttributes.UI_TARGET_PERMANENT_ID to permanentId(target, targetType),
                 ScoutAttributes.UI_TARGET_X to x.toString(),
                 ScoutAttributes.UI_TARGET_Y to y.toString(),
             ),
         )
+        lastTapNanos = epochNanos()
         core?.addBreadcrumb("tap", target)
+    }
+
+    private fun permanentId(label: String, targetType: String): String {
+        var h = 0
+        for (c in "$label|$targetType") h = h * 31 + c.code
+        return (h.toLong() and 0xffffffffL).toString(16)
     }
 
     fun logInfo(message: String) = core?.log(ScoutLogLevel.INFO, message) ?: Unit
@@ -257,4 +351,16 @@ object ScoutEngine {
         core?.recordSpan(name, durationMs, attributes) ?: Unit
 
     fun addBreadcrumb(type: String, message: String) = core?.addBreadcrumb(type, message) ?: Unit
+
+    fun ingestForwardedSpans(payloadJson: String) = core?.ingestForwardedSpans(payloadJson) ?: Unit
+
+    fun ingestForwardedLogs(payloadJson: String) = core?.ingestForwardedLogs(payloadJson) ?: Unit
+
+    fun pushBreadcrumbs(payloadJson: String) =
+        core?.mergeBreadcrumbs(BridgeCodec.decodeBreadcrumbs(payloadJson)) ?: Unit
+
+    fun adoptExternalSessionId(id: String, startIso: String, sampled: Boolean) =
+        core?.adoptExternalSessionId(id, startIso, sampled) ?: Unit
+
+    fun bridgeContext(): String = core?.let { BridgeCodec.encodeContext(it.bridgeContext()) } ?: ""
 }

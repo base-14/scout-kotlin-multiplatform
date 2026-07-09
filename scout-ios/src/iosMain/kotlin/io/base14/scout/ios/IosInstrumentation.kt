@@ -19,7 +19,9 @@ internal class IosInstrumentation(
     private var lastState: String = "inactive"
 
     fun start() {
-        emitStartup()
+        if (core.config.enableStartupTracking) {
+            emitStartup()
+        }
         val center = NSNotificationCenter.defaultCenter
         val queue = NSOperationQueue.mainQueue
         center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, queue) { _ ->

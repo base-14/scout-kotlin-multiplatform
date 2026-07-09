@@ -48,6 +48,8 @@ enum HttpTracking {
             method: request.httpMethod ?? "GET",
             url: url.absoluteString,
             statusCode: Int64(status),
+            responseSize: Int64(response?.expectedContentLength ?? -1),
+            errorMessage: error?.localizedDescription,
             startEpochNanos: startEpochNanos,
             endEpochNanos: nowEpochNanos()
         )
@@ -160,6 +162,8 @@ final class ScoutURLProtocol: URLProtocol, URLSessionDataDelegate {
             method: method,
             url: url,
             statusCode: Int64(status),
+            responseSize: Int64(response?.expectedContentLength ?? -1),
+            errorMessage: error?.localizedDescription,
             startEpochNanos: startEpochNanos,
             endEpochNanos: endEpochNanos
         )

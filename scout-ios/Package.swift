@@ -14,6 +14,7 @@ let package = Package(
     platforms: [.iOS(.v13)],
     products: [
         .library(name: "Scout", targets: ["ScoutKit"]),
+        .library(name: "ScoutNative", targets: ["ScoutNative"]),
     ],
     dependencies: [
         .package(url: "https://github.com/kstenerud/KSCrash.git", exact: "2.5.1"),

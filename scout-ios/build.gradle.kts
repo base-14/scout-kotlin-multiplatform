@@ -28,7 +28,7 @@ kotlin {
     iosTargets.forEach { target ->
         target.binaries.framework {
             baseName = "Scout"
-            isStatic = true
+            isStatic = false
             export(coreDependency)
             xcf.add(this)
         }
