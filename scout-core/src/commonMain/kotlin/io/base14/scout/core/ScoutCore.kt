@@ -401,7 +401,7 @@ class ScoutCore(
             ScoutSpans.SCREEN_LOAD,
             mapOf(
                 ScoutAttributes.SCREEN_NAME to name,
-                ScoutAttributes.SCREEN_LOAD_TIME to durationMs,
+                ScoutAttributes.SCREEN_LOAD_TIME to (durationMs / 1000.0).toString(),
             ),
             startNanos = end - durationMs * 1_000_000L,
             endNanos = end,
@@ -415,7 +415,7 @@ class ScoutCore(
             ScoutSpans.VIEW_SESSION,
             mapOf(
                 ScoutAttributes.SCREEN_NAME to name,
-                ScoutAttributes.VIEW_TIME_SPENT to durationMs,
+                ScoutAttributes.VIEW_TIME_SPENT to (durationMs / 1000.0).toString(),
             ),
             startNanos = end - durationMs * 1_000_000L,
             endNanos = end,
