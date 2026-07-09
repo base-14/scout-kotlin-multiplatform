@@ -80,10 +80,17 @@ private class ScoutWindowCallback(
                 ScoutAttributes.UI_TARGET to label,
                 ScoutAttributes.UI_TARGET_TYPE to targetType,
                 ScoutAttributes.UI_TARGET_NAME_SOURCE to nameSource,
+                ScoutAttributes.UI_TARGET_PERMANENT_ID to permanentIdOf(label, targetType),
                 ScoutAttributes.UI_TARGET_X to x,
                 ScoutAttributes.UI_TARGET_Y to y,
             ),
         )
+    }
+
+    private fun permanentIdOf(label: String, targetType: String): String {
+        var h = 0
+        for (c in "$label|$targetType") h = h * 31 + c.code
+        return (h.toLong() and 0xffffffffL).toString(16)
     }
 }
 

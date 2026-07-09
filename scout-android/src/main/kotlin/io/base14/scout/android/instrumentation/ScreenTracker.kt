@@ -8,7 +8,10 @@ import io.base14.scout.core.platform.randomUuidString
 import io.base14.scout.core.semantics.ScoutAttributes
 import io.base14.scout.core.semantics.ScoutSpans
 
-internal class ScreenTracker(private val core: ScoutCore) {
+internal class ScreenTracker(
+    private val core: ScoutCore,
+    private val emitSpans: Boolean = true,
+) {
     private var current: String? = null
     private var enterUptime = 0L
     private var first = true
@@ -45,28 +48,30 @@ internal class ScreenTracker(private val core: ScoutCore) {
         val referrer = current
         exitCurrent()
 
-        val attrs =
-            mutableMapOf<String, Any>(
-                ScoutAttributes.SCREEN_NAME to name,
-                ScoutAttributes.VIEW_ID to randomUuidString(),
-                ScoutAttributes.VIEW_LOADING_TYPE to if (first) "initial_load" else "route_change",
-                ScoutAttributes.VIEW_IS_ACTIVE to true,
-            )
-        referrer?.let { attrs[ScoutAttributes.VIEW_REFERRER] = it }
-        core.addBreadcrumb("navigation", name)
-        rootSpan = core.beginScreen(ScoutSpans.SCREEN_VIEW, attrs)
-
-        if (loadTimeMs != null) {
-            core.emit(
-                ScoutSpans.SCREEN_LOAD,
-                mapOf(
+        if (emitSpans) {
+            val attrs =
+                mutableMapOf<String, Any>(
                     ScoutAttributes.SCREEN_NAME to name,
-                    ScoutAttributes.SCREEN_LOAD_TIME to secondsString(loadTimeMs),
-                ),
-            )
-        }
+                    ScoutAttributes.VIEW_ID to randomUuidString(),
+                    ScoutAttributes.VIEW_LOADING_TYPE to if (first) "initial_load" else "route_change",
+                    ScoutAttributes.VIEW_IS_ACTIVE to true,
+                )
+            referrer?.let { attrs[ScoutAttributes.VIEW_REFERRER] = it }
+            core.addBreadcrumb("navigation", name)
+            rootSpan = core.beginScreen(ScoutSpans.SCREEN_VIEW, attrs)
 
-        VitalTracker.onScreenChange(core, referrer, name)
+            if (loadTimeMs != null) {
+                core.emit(
+                    ScoutSpans.SCREEN_LOAD,
+                    mapOf(
+                        ScoutAttributes.SCREEN_NAME to name,
+                        ScoutAttributes.SCREEN_LOAD_TIME to secondsString(loadTimeMs),
+                    ),
+                )
+            }
+
+            VitalTracker.onScreenChange(core, referrer, name)
+        }
 
         current = name
         CurrentScreen.name = name
@@ -76,15 +81,17 @@ internal class ScreenTracker(private val core: ScoutCore) {
 
     fun exitCurrent() {
         val s = current ?: return
-        core.emit(
-            ScoutSpans.VIEW_SESSION,
-            mapOf(
-                ScoutAttributes.SCREEN_NAME to s,
-                ScoutAttributes.VIEW_TIME_SPENT to secondsString(SystemClock.uptimeMillis() - enterUptime),
-            ),
-        )
-        rootSpan?.end()
-        rootSpan = null
+        if (emitSpans) {
+            core.emit(
+                ScoutSpans.VIEW_SESSION,
+                mapOf(
+                    ScoutAttributes.SCREEN_NAME to s,
+                    ScoutAttributes.VIEW_TIME_SPENT to secondsString(SystemClock.uptimeMillis() - enterUptime),
+                ),
+            )
+            rootSpan?.end()
+            rootSpan = null
+        }
         current = null
     }
 }

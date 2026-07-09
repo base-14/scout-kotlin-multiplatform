@@ -42,15 +42,16 @@ internal class LifecycleInstrumentation(private val core: ScoutCore) : DefaultLi
         core.sessionManager.onBackground()
     }
 
+    private var previousLifecycleState: String? = null
+
     private fun emit(state: String) {
         core.addBreadcrumb("lifecycle", state)
-        core.emit(
-            ScoutSpans.APP_LIFECYCLE_CHANGED,
-            mapOf(
-                ScoutAttributes.APP_LIFECYCLE_ID to randomUuidString(),
-                ScoutAttributes.APP_LIFECYCLE_STATE to state,
-                ScoutAttributes.APP_LIFECYCLE_TIMESTAMP to isoUtc(epochMillis()),
-            ),
-        )
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.APP_LIFECYCLE_ID] = randomUuidString()
+        attrs[ScoutAttributes.APP_LIFECYCLE_STATE] = state
+        previousLifecycleState?.let { attrs[ScoutAttributes.APP_LIFECYCLE_PREVIOUS_STATE] = it }
+        attrs[ScoutAttributes.APP_LIFECYCLE_TIMESTAMP] = isoUtc(epochMillis())
+        core.emit(ScoutSpans.APP_LIFECYCLE_CHANGED, attrs)
+        previousLifecycleState = state
     }
 }

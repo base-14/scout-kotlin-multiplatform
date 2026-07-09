@@ -10,8 +10,10 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
+import io.base14.scout.android.internal.CurrentScreen
 import io.base14.scout.android.internal.DeviceResources
 import io.base14.scout.core.ScoutCore
+import io.base14.scout.core.semantics.ScoutAttributes
 import java.net.NetworkInterface
 import io.base14.scout.core.semantics.ScoutResourceAttributes as R
 
@@ -52,6 +54,7 @@ internal class DynamicAttributes(private val app: Application) {
                 batteryLevel()?.let { put(R.DEVICE_BATTERY_LEVEL, it.toString()) }
                 put(R.DEVICE_BATTERY_STATE, batteryState())
                 batteryDischargeRate()?.let { put(R.DEVICE_BATTERY_DISCHARGE_RATE, it.toString()) }
+                CurrentScreen.name?.let { put(ScoutAttributes.SCREEN_NAME, it) }
             }
         }
     }

@@ -46,7 +46,7 @@ object Scout {
                 )
             core = created
             runCatching { ScoutBridge.resolveOnInit(application, created, config.role) }
-            val tracker = ScreenTracker(created)
+            val tracker = ScreenTracker(created, config.enableScreenTracking)
             screenTracker = tracker
             ScoutInstrumentation.installAll(application, created, config, tracker)
             runCatching { created.replayPendingCrash() }
