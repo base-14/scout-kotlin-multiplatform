@@ -58,6 +58,10 @@ object ScoutBridge {
         runCatching { core()?.ingestForwardedLogs(payloadJson) }
     }
 
+    fun ingestMetrics(payloadJson: String) {
+        runCatching { core()?.ingestForwardedMetrics(payloadJson) }
+    }
+
     fun pushBreadcrumbs(payloadJson: String) {
         runCatching { core()?.mergeBreadcrumbs(BridgeCodec.decodeBreadcrumbs(payloadJson)) }
     }

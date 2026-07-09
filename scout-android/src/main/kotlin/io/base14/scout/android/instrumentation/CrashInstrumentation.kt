@@ -19,7 +19,7 @@ internal class CrashInstrumentation(private val core: ScoutCore) {
 
     private fun report(t: Throwable) {
         val type = t::class.qualifiedName ?: "Throwable"
-        val message = t.message ?: ""
+        val message = t.message?.takeIf { it.isNotBlank() } ?: type
         val stack = t.stackTraceToString()
         val attrs =
             buildMap<String, Any> {
@@ -49,7 +49,7 @@ internal class CrashInstrumentation(private val core: ScoutCore) {
                 mapOf(
                     ScoutAttributes.ERROR_ID to randomUuidString(),
                     ScoutAttributes.ERROR_TYPE to (t::class.qualifiedName ?: "Throwable"),
-                    ScoutAttributes.ERROR_MESSAGE to (t.message ?: ""),
+                    ScoutAttributes.ERROR_MESSAGE to (t.message?.takeIf { it.isNotBlank() } ?: (t::class.qualifiedName ?: "Throwable")),
                     ScoutAttributes.ERROR_STACK_TRACE to t.stackTraceToString(),
                     ScoutAttributes.ERROR_HANDLED to handled.toString(),
                     ScoutAttributes.ERROR_HANDLING to if (handled) "handled" else "unhandled",
