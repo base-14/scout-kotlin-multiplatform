@@ -43,4 +43,11 @@ object BridgeCodec {
     fun decodeLogs(payload: String): List<ForwardedLog> =
         runCatching { json.decodeFromString(ForwardedLogBatch.serializer(), payload).logs }
             .getOrDefault(emptyList())
+
+    fun encodeMetrics(metrics: List<ForwardedMetric>): String =
+        json.encodeToString(ForwardedMetricBatch.serializer(), ForwardedMetricBatch(metrics))
+
+    fun decodeMetrics(payload: String): List<ForwardedMetric> =
+        runCatching { json.decodeFromString(ForwardedMetricBatch.serializer(), payload).metrics }
+            .getOrDefault(emptyList())
 }

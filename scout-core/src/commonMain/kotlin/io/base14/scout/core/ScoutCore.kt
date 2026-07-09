@@ -361,6 +361,17 @@ class ScoutCore(
         }
     }
 
+    fun ingestForwardedMetrics(payloadJson: String) {
+        if (!config.enableMetrics) return
+        val points =
+            io.base14.scout.core.bridge.BridgeCodec.decodeMetrics(payloadJson).map { m ->
+                val attrs = LinkedHashMap<String, Any>(m.attributes)
+                attrs[ScoutAttributes.SESSION_ID] = sessionManager.sessionId()
+                MetricPoint(m.name, m.value, m.unit, attrs, m.timestampUnixNano?.toLongOrNull() ?: epochNanos())
+            }
+        if (points.isNotEmpty()) runCatching { metricEmitter.emit(points) }
+    }
+
     private fun severityFromInt(n: Int): SeverityNumber = when {
         n < 9 -> SeverityNumber.DEBUG
         n < 13 -> SeverityNumber.INFO

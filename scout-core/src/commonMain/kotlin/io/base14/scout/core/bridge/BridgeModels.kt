@@ -73,6 +73,19 @@ data class ForwardedLog(
 data class ForwardedLogBatch(val logs: List<ForwardedLog> = emptyList())
 
 @Serializable
+data class ForwardedMetric(
+    val scope: String = "",
+    val name: String,
+    val value: Double = 0.0,
+    val unit: String = "",
+    @SerialName("timestamp_unix_nano") val timestampUnixNano: String? = null,
+    val attributes: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class ForwardedMetricBatch(val metrics: List<ForwardedMetric> = emptyList())
+
+@Serializable
 data class OwnerRecord(
     val owner: String,
     val protocol: Int,
