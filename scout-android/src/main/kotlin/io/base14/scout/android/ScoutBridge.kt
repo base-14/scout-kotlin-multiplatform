@@ -66,6 +66,10 @@ object ScoutBridge {
         runCatching { core()?.mergeBreadcrumbs(BridgeCodec.decodeBreadcrumbs(payloadJson)) }
     }
 
+    fun setBreadcrumbs(payloadJson: String) {
+        runCatching { core()?.replaceBreadcrumbs(BridgeCodec.decodeBreadcrumbsArray(payloadJson)) }
+    }
+
     fun adoptExternalSessionId(
         id: String,
         startIso: String,
