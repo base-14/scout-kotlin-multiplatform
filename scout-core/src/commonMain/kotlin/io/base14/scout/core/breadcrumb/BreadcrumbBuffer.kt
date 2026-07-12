@@ -31,6 +31,12 @@ class BreadcrumbBuffer(private val max: Int = 100, private val store: KeyValueSt
         store?.putString(KEY, jsonOf(items))
     }
 
+    fun replaceAll(crumbs: List<Breadcrumb>): Unit = lock.withLock {
+        items.clear()
+        for (b in crumbs.takeLast(max)) items.addLast(b)
+        store?.putString(KEY, jsonOf(items))
+    }
+
     fun snapshot(): List<Breadcrumb> = lock.withLock { items.toList() }
 
     fun toJson(): String = lock.withLock { jsonOf(items) }

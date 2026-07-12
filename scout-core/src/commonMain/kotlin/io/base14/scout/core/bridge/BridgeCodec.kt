@@ -1,5 +1,6 @@
 package io.base14.scout.core.bridge
 
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 object BridgeCodec {
@@ -35,6 +36,10 @@ object BridgeCodec {
 
     fun decodeBreadcrumbs(payload: String): List<BridgeBreadcrumb> =
         runCatching { json.decodeFromString(BreadcrumbsBatch.serializer(), payload).breadcrumbs }
+            .getOrDefault(emptyList())
+
+    fun decodeBreadcrumbsArray(payload: String): List<BridgeBreadcrumb> =
+        runCatching { json.decodeFromString(ListSerializer(BridgeBreadcrumb.serializer()), payload) }
             .getOrDefault(emptyList())
 
     fun encodeLogs(logs: List<ForwardedLog>): String =

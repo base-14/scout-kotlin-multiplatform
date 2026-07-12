@@ -1,5 +1,6 @@
 package io.base14.scout.core
 
+import io.base14.scout.core.breadcrumb.Breadcrumb
 import io.base14.scout.core.breadcrumb.BreadcrumbBuffer
 import io.base14.scout.core.export.MetricPoint
 import io.base14.scout.core.export.OtlpJsonSerializer
@@ -336,6 +337,11 @@ class ScoutCore(
         for (c in crumbs) breadcrumbs.addAt(c.type, c.message, c.time ?: now)
     }
 
+    fun replaceBreadcrumbs(crumbs: List<io.base14.scout.core.bridge.BridgeBreadcrumb>) {
+        val now = isoUtc(epochMillis())
+        breadcrumbs.replaceAll(crumbs.map { Breadcrumb(it.type, it.message, it.time ?: now) })
+    }
+
     private val forwardedLoggers = LinkedHashMap<String, Logger>()
     private fun loggerFor(scope: String): Logger = attrLock.withLock {
         forwardedLoggers.getOrPut(scope) { otel.loggerProvider.getLogger(scope, version = SCOUT_SDK_VERSION) }
@@ -467,14 +473,45 @@ class ScoutCore(
         out.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
+    private val pendingCrashDir: Path? = cacheDir?.div("scout_pending_crash")
+
     fun persistCrash(attributes: Map<String, Any>) {
         val obj = buildJsonObject { for ((k, v) in attributes) put(k, v.toString()) }
-        store.putStringDurable(KEY_PENDING_CRASH, obj.toString())
+        val payload = obj.toString()
+        val dir = pendingCrashDir
+        if (dir != null) {
+            val written = runCatching {
+                okio.FileSystem.SYSTEM.createDirectories(dir)
+                val name = randomUuidString()
+                val tmp = dir / "$name.tmp"
+                okio.FileSystem.SYSTEM.write(tmp) { writeUtf8(payload) }
+                okio.FileSystem.SYSTEM.atomicMove(tmp, dir / "$name.json")
+            }.isSuccess
+            if (written) return
+        }
+        store.putStringDurable(KEY_PENDING_CRASH, payload)
     }
 
     fun replayPendingCrash() {
-        val raw = store.getString(KEY_PENDING_CRASH) ?: return
-        store.remove(KEY_PENDING_CRASH)
+        val payloads = ArrayList<String>()
+        store.getString(KEY_PENDING_CRASH)?.let {
+            store.remove(KEY_PENDING_CRASH)
+            payloads.add(it)
+        }
+        pendingCrashDir?.let { dir ->
+            runCatching {
+                for (f in okio.FileSystem.SYSTEM.list(dir)) {
+                    if (!f.name.endsWith(".json")) continue
+                    runCatching { okio.FileSystem.SYSTEM.read(f) { readUtf8() } }
+                        .getOrNull()?.let { payloads.add(it) }
+                    runCatching { okio.FileSystem.SYSTEM.delete(f) }
+                }
+            }
+        }
+        for (raw in payloads) replayCrashPayload(raw)
+    }
+
+    private fun replayCrashPayload(raw: String) {
         val obj = runCatching { crashJson.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return
         val attrs = LinkedHashMap<String, Any>()
         for ((k, v) in obj) attrs[k] = v.jsonPrimitive.content

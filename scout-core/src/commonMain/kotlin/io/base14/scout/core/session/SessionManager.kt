@@ -55,23 +55,26 @@ class SessionManager(
         val id = randomUuidString()
         val sampled = Sampler.decide(id, config.sessionSampleRate)
         return PersistedSession(id, now, now, sampled, isoUtc(now), previousId)
-            .also {
-                persist(it)
-                onSessionChanged?.invoke()
-            }
+            .also { persist(it) }
     }
 
     private fun persist(s: PersistedSession) {
         store.putString(KEY, json.encodeToString(PersistedSession.serializer(), s))
     }
 
-    fun current(): PersistedSession = lock.withLock {
-        if (config.maxSessionDurationMinutes > 0 &&
-            epochMillis() - session.startedAt >= config.maxSessionDurationMinutes * 60_000L
-        ) {
-            session = create(previousId = session.id)
+    fun current(): PersistedSession {
+        var changed = false
+        val result = lock.withLock {
+            if (config.maxSessionDurationMinutes > 0 &&
+                epochMillis() - session.startedAt >= config.maxSessionDurationMinutes * 60_000L
+            ) {
+                session = create(previousId = session.id)
+                changed = true
+            }
+            session
         }
-        session
+        if (changed) onSessionChanged?.invoke()
+        return result
     }
 
     fun sessionId(): String = current().id
@@ -90,20 +93,27 @@ class SessionManager(
         persist(session)
     }
 
-    fun onForeground(): Unit = lock.withLock {
-        val bg = backgroundedAt
-        if (bg != null && epochMillis() - bg >= config.sessionTimeoutMinutes * 60_000L) {
-            session = create(previousId = session.id)
+    fun onForeground() {
+        var changed = false
+        lock.withLock {
+            val bg = backgroundedAt
+            if (bg != null && epochMillis() - bg >= config.sessionTimeoutMinutes * 60_000L) {
+                session = create(previousId = session.id)
+                changed = true
+            }
+            backgroundedAt = null
+            session = session.copy(lastActive = epochMillis())
+            persist(session)
         }
-        backgroundedAt = null
-        session = session.copy(lastActive = epochMillis())
-        persist(session)
+        if (changed) onSessionChanged?.invoke()
     }
 
-    fun adoptExternal(id: String, sampled: Boolean, startIso: String): Unit = lock.withLock {
-        val now = epochMillis()
-        session = PersistedSession(id, now, now, sampled, startIso, session.id)
-        persist(session)
+    fun adoptExternal(id: String, sampled: Boolean, startIso: String) {
+        lock.withLock {
+            val now = epochMillis()
+            session = PersistedSession(id, now, now, sampled, startIso, session.id)
+            persist(session)
+        }
         onSessionChanged?.invoke()
     }
 
