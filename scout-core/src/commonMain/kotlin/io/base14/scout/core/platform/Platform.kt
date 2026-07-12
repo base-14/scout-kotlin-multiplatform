@@ -8,6 +8,8 @@ expect fun isoUtc(epochMillis: Long): String
 
 expect fun randomUuidString(): String
 
+expect fun systemFileSystem(): okio.FileSystem
+
 expect class ScoutLock() {
     fun <T> withLock(block: () -> T): T
 }

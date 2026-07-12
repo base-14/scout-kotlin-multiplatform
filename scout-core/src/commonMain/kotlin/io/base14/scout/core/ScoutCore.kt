@@ -18,6 +18,7 @@ import io.base14.scout.core.platform.epochMillis
 import io.base14.scout.core.platform.epochNanos
 import io.base14.scout.core.platform.isoUtc
 import io.base14.scout.core.platform.randomUuidString
+import io.base14.scout.core.platform.systemFileSystem
 import io.base14.scout.core.semantics.ScoutAttributes
 import io.base14.scout.core.semantics.ScoutResourceAttributes
 import io.base14.scout.core.semantics.ScoutSpans
@@ -481,11 +482,11 @@ class ScoutCore(
         val dir = pendingCrashDir
         if (dir != null) {
             val written = runCatching {
-                okio.FileSystem.SYSTEM.createDirectories(dir)
+                systemFileSystem().createDirectories(dir)
                 val name = randomUuidString()
                 val tmp = dir / "$name.tmp"
-                okio.FileSystem.SYSTEM.write(tmp) { writeUtf8(payload) }
-                okio.FileSystem.SYSTEM.atomicMove(tmp, dir / "$name.json")
+                systemFileSystem().write(tmp) { writeUtf8(payload) }
+                systemFileSystem().atomicMove(tmp, dir / "$name.json")
             }.isSuccess
             if (written) return
         }
@@ -500,11 +501,11 @@ class ScoutCore(
         }
         pendingCrashDir?.let { dir ->
             runCatching {
-                for (f in okio.FileSystem.SYSTEM.list(dir)) {
+                for (f in systemFileSystem().list(dir)) {
                     if (!f.name.endsWith(".json")) continue
-                    runCatching { okio.FileSystem.SYSTEM.read(f) { readUtf8() } }
+                    runCatching { systemFileSystem().read(f) { readUtf8() } }
                         .getOrNull()?.let { payloads.add(it) }
-                    runCatching { okio.FileSystem.SYSTEM.delete(f) }
+                    runCatching { systemFileSystem().delete(f) }
                 }
             }
         }

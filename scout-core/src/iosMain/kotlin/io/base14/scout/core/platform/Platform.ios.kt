@@ -22,6 +22,8 @@ actual fun isoUtc(epochMillis: Long): String {
 
 actual fun randomUuidString(): String = NSUUID().UUIDString()
 
+actual fun systemFileSystem(): okio.FileSystem = okio.FileSystem.SYSTEM
+
 actual class ScoutLock actual constructor() {
     private val lock = NSRecursiveLock()
     actual fun <T> withLock(block: () -> T): T {

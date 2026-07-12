@@ -20,6 +20,8 @@ actual fun isoUtc(epochMillis: Long): String = synchronized(isoFormat) { isoForm
 
 actual fun randomUuidString(): String = UUID.randomUUID().toString()
 
+actual fun systemFileSystem(): okio.FileSystem = okio.FileSystem.SYSTEM
+
 actual class ScoutLock actual constructor() {
     private val lock = ReentrantLock()
     actual fun <T> withLock(block: () -> T): T {
