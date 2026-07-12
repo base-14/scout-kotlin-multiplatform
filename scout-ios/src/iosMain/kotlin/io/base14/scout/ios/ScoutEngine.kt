@@ -356,8 +356,13 @@ object ScoutEngine {
 
     fun ingestForwardedLogs(payloadJson: String) = core?.ingestForwardedLogs(payloadJson) ?: Unit
 
+    fun ingestForwardedMetrics(payloadJson: String) = core?.ingestForwardedMetrics(payloadJson) ?: Unit
+
     fun pushBreadcrumbs(payloadJson: String) =
         core?.mergeBreadcrumbs(BridgeCodec.decodeBreadcrumbs(payloadJson)) ?: Unit
+
+    fun setBreadcrumbs(payloadJson: String) =
+        core?.replaceBreadcrumbs(BridgeCodec.decodeBreadcrumbsArray(payloadJson)) ?: Unit
 
     fun adoptExternalSessionId(id: String, startIso: String, sampled: Boolean) =
         core?.adoptExternalSessionId(id, startIso, sampled) ?: Unit

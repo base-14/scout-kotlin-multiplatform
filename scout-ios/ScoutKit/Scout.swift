@@ -47,6 +47,29 @@ public enum Scout {
         }
     }
 
+    public static func startBridge(
+        serviceName: String,
+        endpoint: String,
+        environment: String? = nil,
+        headers: [String: String] = [:],
+        sessionSampleRate: Double = 1.0,
+        anrThresholdMs: Double = 5000
+    ) {
+        ScoutCrashReporter.install()
+        ScoutEngine.shared.configure(
+            serviceName: serviceName,
+            endpoint: endpoint,
+            environment: environment,
+            headers: headers,
+            sessionSampleRate: sessionSampleRate,
+            enableScreenTracking: false,
+            enableTapTracking: false,
+            enableStartupTracking: false
+        )
+        ScoutCrashReporter.drainPending()
+        AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
+    }
+
     public static func setScreen(_ name: String) { ScoutEngine.shared.setScreen(name: name) }
     public static func reportError(_ error: Error, stackTrace: [String] = Thread.callStackSymbols) {
         ScoutEngine.shared.reportError(
