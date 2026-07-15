@@ -77,6 +77,7 @@ fun iosResourceAttributes(): Map<String, String> {
     val machine = deviceMachine()
     return buildMap {
         put(ScoutResourceAttributes.OS_NAME, "iOS")
+        put(ScoutResourceAttributes.SCOUT_IOS_VERSION, ScoutIosBuildInfo.IOS_VERSION)
         put(ScoutResourceAttributes.OS_VERSION, device.systemVersion)
         device.systemVersion.substringBefore(".").takeIf { it.isNotBlank() }?.let {
             put(ScoutResourceAttributes.OS_VERSION_MAJOR, it)

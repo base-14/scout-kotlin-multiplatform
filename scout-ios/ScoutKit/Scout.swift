@@ -53,7 +53,8 @@ public enum Scout {
         environment: String? = nil,
         headers: [String: String] = [:],
         sessionSampleRate: Double = 1.0,
-        anrThresholdMs: Double = 5000
+        anrThresholdMs: Double = 5000,
+        resourceAttributes: [String: String] = [:]
     ) {
         ScoutCrashReporter.install()
         ScoutEngine.shared.configure(
@@ -64,7 +65,8 @@ public enum Scout {
             sessionSampleRate: sessionSampleRate,
             enableScreenTracking: false,
             enableTapTracking: false,
-            enableStartupTracking: false
+            enableStartupTracking: false,
+            resourceAttributes: resourceAttributes
         )
         ScoutCrashReporter.drainPending()
         AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)

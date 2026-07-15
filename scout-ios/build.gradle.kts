@@ -74,3 +74,24 @@ mavenPublishing {
         }
     }
 }
+
+val generateScoutIosBuildInfo by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/scoutIosBuildInfo/kotlin")
+    val ver = project.version.toString()
+    inputs.property("version", ver)
+    outputs.dir(outDir)
+    doLast {
+        val f = outDir.get().file("io/base14/scout/ios/ScoutIosBuildInfo.kt").asFile
+        f.parentFile.mkdirs()
+        f.writeText(
+            "package io.base14.scout.ios\n\n" +
+                "internal object ScoutIosBuildInfo {\n" +
+                "    const val IOS_VERSION: String = \"$ver\"\n" +
+                "}\n",
+        )
+    }
+}
+
+kotlin.sourceSets.named("iosMain").configure {
+    kotlin.srcDir(generateScoutIosBuildInfo)
+}

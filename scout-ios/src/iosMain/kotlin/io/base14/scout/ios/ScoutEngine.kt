@@ -46,6 +46,7 @@ object ScoutEngine {
         enableScreenTracking: Boolean,
         enableTapTracking: Boolean,
         enableStartupTracking: Boolean,
+        resourceAttributes: Map<String, String> = emptyMap(),
     ) {
         initialize(
             ScoutConfig(
@@ -57,6 +58,7 @@ object ScoutEngine {
                 enableScreenTracking = enableScreenTracking,
                 enableTapTracking = enableTapTracking,
                 enableStartupTracking = enableStartupTracking,
+                resourceAttributes = resourceAttributes,
             ),
         )
     }
