@@ -88,3 +88,24 @@ mavenPublishing {
         }
     }
 }
+
+val generateScoutKmpBuildInfo by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/scoutKmpBuildInfo/kotlin")
+    val ver = project.version.toString()
+    inputs.property("version", ver)
+    outputs.dir(outDir)
+    doLast {
+        val f = outDir.get().file("io/base14/scout/kmp/ScoutKmpBuildInfo.kt").asFile
+        f.parentFile.mkdirs()
+        f.writeText(
+            "package io.base14.scout.kmp\n\n" +
+                "internal object ScoutKmpBuildInfo {\n" +
+                "    const val KMP_VERSION: String = \"$ver\"\n" +
+                "}\n",
+        )
+    }
+}
+
+kotlin.sourceSets.named("commonMain").configure {
+    kotlin.srcDir(generateScoutKmpBuildInfo)
+}

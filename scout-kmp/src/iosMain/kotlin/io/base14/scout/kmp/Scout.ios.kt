@@ -4,7 +4,7 @@ import io.base14.scout.core.ScoutConfig
 import io.base14.scout.ios.ScoutEngine
 
 actual object Scout {
-    actual fun initialize(config: ScoutConfig) = ScoutEngine.initialize(config)
+    actual fun initialize(config: ScoutConfig) = ScoutEngine.initialize(config.withKmpVersion())
     actual fun setScreen(name: String) = ScoutEngine.setScreen(name)
 
     actual fun setUser(id: String?) {

@@ -7,7 +7,7 @@ actual object Scout {
     actual fun initialize(config: ScoutConfig) {
         val app = ScoutAppHolder.application
             ?: error("Scout: Application not available (ScoutInitProvider not registered?)")
-        AndroidScout.initialize(app, config)
+        AndroidScout.initialize(app, config.withKmpVersion())
     }
 
     actual fun setScreen(name: String) = AndroidScout.setScreen(name)
