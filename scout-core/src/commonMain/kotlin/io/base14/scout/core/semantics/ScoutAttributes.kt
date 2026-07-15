@@ -88,6 +88,12 @@ object ScoutAttributes {
 object ScoutResourceAttributes {
     const val SERVICE_NAME = "service.name"
     const val SERVICE_VERSION = "service.version"
+
+    const val SCOUT_CORE_VERSION = "scout.core.version"
+    const val SCOUT_ANDROID_VERSION = "scout.android.version"
+    const val SCOUT_IOS_VERSION = "scout.ios.version"
+    const val SCOUT_KMP_VERSION = "scout.kmp.version"
+    const val SCOUT_FLUTTER_VERSION = "scout.flutter.version"
     const val ENVIRONMENT = "environment"
     const val APP_BUNDLE_ID = "app.bundle_id"
     const val APP_VERSION = "app.version"

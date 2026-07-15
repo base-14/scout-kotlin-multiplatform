@@ -101,3 +101,24 @@ mavenPublishing {
         }
     }
 }
+
+val generateScoutBuildInfo by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/scoutBuildInfo/kotlin")
+    val ver = project.version.toString()
+    inputs.property("version", ver)
+    outputs.dir(outDir)
+    doLast {
+        val f = outDir.get().file("io/base14/scout/core/ScoutBuildInfo.kt").asFile
+        f.parentFile.mkdirs()
+        f.writeText(
+            "package io.base14.scout.core\n\n" +
+                "internal object ScoutBuildInfo {\n" +
+                "    const val CORE_VERSION: String = \"$ver\"\n" +
+                "}\n",
+        )
+    }
+}
+
+kotlin.sourceSets.named("commonMain").configure {
+    kotlin.srcDir(generateScoutBuildInfo)
+}

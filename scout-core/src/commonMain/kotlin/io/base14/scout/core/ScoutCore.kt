@@ -115,6 +115,7 @@ class ScoutCore(
         val m = LinkedHashMap<String, String>()
         m.putAll(platform)
         m.putAll(config.resourceAttributes)
+        m[ScoutResourceAttributes.SCOUT_CORE_VERSION] = ScoutBuildInfo.CORE_VERSION
         config.environment?.let { m[ScoutResourceAttributes.ENVIRONMENT] = it }
         m[ScoutResourceAttributes.SERVICE_VERSION] = config.serviceVersion ?: nativeServiceVersion(platform)
         m.remove(ScoutResourceAttributes.SERVICE_NAME)
