@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import io.base14.scout.android.BuildConfig
 import io.base14.scout.android.instrumentation.NativeLibInfo
 import java.util.Locale
 import java.util.TimeZone
@@ -13,6 +14,7 @@ internal object DeviceResources {
     fun collect(context: Context): Map<String, String> {
         val m = LinkedHashMap<String, String>()
         m[R.OS_NAME] = "Android"
+        m[R.SCOUT_ANDROID_VERSION] = BuildConfig.SCOUT_ANDROID_VERSION
         m[R.OS_VERSION] = Build.VERSION.RELEASE ?: ""
         (Build.VERSION.RELEASE ?: "").substringBefore(".").takeIf { it.isNotBlank() }?.let { m[R.OS_VERSION_MAJOR] = it }
         m[R.OS_BUILD] = Build.DISPLAY ?: ""

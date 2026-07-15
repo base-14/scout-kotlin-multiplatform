@@ -17,8 +17,13 @@ android {
     compileSdk = 35
     ndkVersion = "27.1.12297006"
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         minSdk = 26
+        buildConfigField("String", "SCOUT_ANDROID_VERSION", "\"${project.version}\"")
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
