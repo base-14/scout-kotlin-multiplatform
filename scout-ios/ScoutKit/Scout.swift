@@ -16,6 +16,15 @@ public enum Scout {
         enableScreenTracking: Bool = true,
         enableTapTracking: Bool = true,
         enableMetrics: Bool = true,
+        enableMemoryMetrics: Bool = false,
+        enableCpuMetrics: Bool = false,
+        enableFrameMetrics: Bool = false,
+        exportIntervalSeconds: Int = 30,
+        maxExportBatchSize: Int = 512,
+        maxQueueSize: Int = 2048,
+        maxRetries: Int = 0,
+        vitalsCollectionIntervalSeconds: Int = 60,
+        offlineBufferEnabled: Bool = false,
         anrThresholdMs: Double = 5000
     ) {
         // Arm the crash handler before anything else so an early crash is still captured.
@@ -28,7 +37,24 @@ public enum Scout {
             endpoint: endpoint,
             environment: environment,
             headers: headers,
-            sessionSampleRate: sessionSampleRate
+            sessionSampleRate: sessionSampleRate,
+            enableScreenTracking: enableScreenTracking,
+            enableTapTracking: enableTapTracking,
+            enableStartupTracking: true,
+            resourceAttributes: [:],
+            enableMemoryMetrics: enableMemoryMetrics,
+            enableCpuMetrics: enableCpuMetrics,
+            enableFrameMetrics: enableFrameMetrics,
+            exportIntervalSeconds: Int32(exportIntervalSeconds),
+            maxExportBatchSize: Int32(maxExportBatchSize),
+            maxQueueSize: Int32(maxQueueSize),
+            maxRetries: Int32(maxRetries),
+            vitalsCollectionIntervalSeconds: Int32(vitalsCollectionIntervalSeconds),
+            offlineBufferEnabled: offlineBufferEnabled,
+            metricExportIntervalSeconds: -1,
+            offlineMaxTraceItems: 0,
+            offlineMaxMetricItems: 0,
+            offlineMaxLogItems: 0
         )
 
         // Now that the engine exists, emit any crash captured on the previous run and start
@@ -42,7 +68,11 @@ public enum Scout {
         if enableScreenTracking { ScreenTracking.install() }
         if enableTapTracking { TapTracking.install() }
         if enableMetrics {
-            MetricsCollector.shared.start()
+            MetricsCollector.shared.start(
+                memoryEnabled: enableMemoryMetrics,
+                cpuEnabled: enableCpuMetrics,
+                intervalSeconds: vitalsCollectionIntervalSeconds
+            )
             FrameWatcher.shared.start()
         }
     }
@@ -54,7 +84,20 @@ public enum Scout {
         headers: [String: String] = [:],
         sessionSampleRate: Double = 1.0,
         anrThresholdMs: Double = 5000,
-        resourceAttributes: [String: String] = [:]
+        resourceAttributes: [String: String] = [:],
+        exportIntervalSeconds: Int = 30,
+        maxExportBatchSize: Int = 512,
+        maxQueueSize: Int = 2048,
+        maxRetries: Int = 0,
+        vitalsCollectionIntervalSeconds: Int = 60,
+        offlineBufferEnabled: Bool = false,
+        enableMemoryMetrics: Bool = false,
+        enableCpuMetrics: Bool = false,
+        enableFrameMetrics: Bool = false,
+        metricExportIntervalSeconds: Int = -1,
+        offlineMaxTraceItems: Int = 0,
+        offlineMaxMetricItems: Int = 0,
+        offlineMaxLogItems: Int = 0
     ) {
         ScoutCrashReporter.install()
         ScoutEngine.shared.configure(
@@ -66,7 +109,20 @@ public enum Scout {
             enableScreenTracking: false,
             enableTapTracking: false,
             enableStartupTracking: false,
-            resourceAttributes: resourceAttributes
+            resourceAttributes: resourceAttributes,
+            enableMemoryMetrics: enableMemoryMetrics,
+            enableCpuMetrics: enableCpuMetrics,
+            enableFrameMetrics: enableFrameMetrics,
+            exportIntervalSeconds: Int32(exportIntervalSeconds),
+            maxExportBatchSize: Int32(maxExportBatchSize),
+            maxQueueSize: Int32(maxQueueSize),
+            maxRetries: Int32(maxRetries),
+            vitalsCollectionIntervalSeconds: Int32(vitalsCollectionIntervalSeconds),
+            offlineBufferEnabled: offlineBufferEnabled,
+            metricExportIntervalSeconds: Int32(metricExportIntervalSeconds),
+            offlineMaxTraceItems: Int32(offlineMaxTraceItems),
+            offlineMaxMetricItems: Int32(offlineMaxMetricItems),
+            offlineMaxLogItems: Int32(offlineMaxLogItems)
         )
         ScoutCrashReporter.drainPending()
         AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)

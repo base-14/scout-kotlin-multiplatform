@@ -9,11 +9,16 @@ final class MetricsCollector {
 
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "io.base14.scout.metrics", qos: .utility)
+    private var memoryEnabled = false
+    private var cpuEnabled = false
 
-    func start(intervalSeconds: Int = 10) {
+    func start(memoryEnabled: Bool, cpuEnabled: Bool, intervalSeconds: Int) {
         guard timer == nil else { return }
+        guard memoryEnabled || cpuEnabled else { return }
+        self.memoryEnabled = memoryEnabled
+        self.cpuEnabled = cpuEnabled
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + 1, repeating: .seconds(intervalSeconds))
+        t.schedule(deadline: .now() + 1, repeating: .seconds(max(1, intervalSeconds)))
         t.setEventHandler { [weak self] in self?.sample() }
         timer = t
         t.resume()
@@ -25,10 +30,12 @@ final class MetricsCollector {
     }
 
     private func sample() {
-        if let bytes = residentMemoryBytes() {
+        if memoryEnabled, let bytes = residentMemoryBytes() {
             ScoutEngine.shared.emitGauge(name: "process.memory.usage", value: bytes, unit: "By")
         }
-        ScoutEngine.shared.emitGauge(name: "process.cpu.usage", value: cpuUsagePercent(), unit: "1")
+        if cpuEnabled {
+            ScoutEngine.shared.emitGauge(name: "process.cpu.usage", value: cpuUsagePercent(), unit: "1")
+        }
     }
 
     private func residentMemoryBytes() -> Double? {
