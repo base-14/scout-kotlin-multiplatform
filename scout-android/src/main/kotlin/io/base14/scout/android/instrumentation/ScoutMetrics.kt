@@ -12,20 +12,32 @@ internal class ScoutMetrics(private val core: ScoutCore) {
     private var lastCpuWallMs = 0L
 
     fun install() {
+        val config = core.config
+        val memoryOn = config.enableMemoryMetrics
+        val cpuOn = config.enableCpuMetrics
+        val frameOn = config.enableFrameMetrics
+        if (!memoryOn && !cpuOn && !frameOn) return
+        val intervalMs = config.effectiveVitalsCollectionIntervalSeconds * 1000L
         val thread =
             Thread {
                 val runtime = Runtime.getRuntime()
                 while (running) {
                     val screenAttr = mapOf<String, Any>(ScoutAttributes.SCREEN_NAME to (CurrentScreen.name ?: ""))
-                    runCatching {
-                        val usedBytes = (runtime.totalMemory() - runtime.freeMemory()).toDouble()
-                        core.emitGauge("android.memory.usage", usedBytes, "By", screenAttr)
+                    if (memoryOn) {
+                        runCatching {
+                            val usedBytes = (runtime.totalMemory() - runtime.freeMemory()).toDouble()
+                            core.emitGauge("android.memory.usage", usedBytes, "By", screenAttr)
+                        }
                     }
-                    runCatching { cpuPercent()?.let { core.emitGauge("android.cpu.usage", it, "%", screenAttr) } }
-                    runCatching {
-                        FrameStats.drainAverageMs()?.let { core.emitGauge("android.frame.build_time", it, "ms", screenAttr) }
+                    if (cpuOn) {
+                        runCatching { cpuPercent()?.let { core.emitGauge("android.cpu.usage", it, "%", screenAttr) } }
                     }
-                    Thread.sleep(SAMPLE_INTERVAL_MS)
+                    if (frameOn) {
+                        runCatching {
+                            FrameStats.drainAverageMs()?.let { core.emitGauge("android.frame.build_time", it, "ms", screenAttr) }
+                        }
+                    }
+                    Thread.sleep(intervalMs)
                 }
             }
         thread.isDaemon = true
@@ -52,7 +64,6 @@ internal class ScoutMetrics(private val core: ScoutCore) {
     }
 
     private companion object {
-        const val SAMPLE_INTERVAL_MS = 10_000L
         const val CLK_TCK = 100.0
     }
 }

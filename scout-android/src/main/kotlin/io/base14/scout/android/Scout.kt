@@ -40,7 +40,7 @@ object Scout {
                 ScoutCore(
                     config = config,
                     store = AndroidKeyValueStore(application),
-                    httpClient = createScoutHttpClient(),
+                    httpClient = createScoutHttpClient(config.effectiveExportIntervalSeconds + 35L),
                     platformResourceAttributes = DeviceResources.collect(application),
                     cacheDirPath = application.cacheDir.absolutePath,
                 )

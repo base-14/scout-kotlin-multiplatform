@@ -5,8 +5,18 @@ import android.app.Application
 import android.os.Bundle
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import okhttp3.ConnectionPool
+import java.util.concurrent.TimeUnit
 
-internal fun createScoutHttpClient(): HttpClient = HttpClient(OkHttp)
+internal fun createScoutHttpClient(keepAliveSeconds: Long = 65): HttpClient =
+    HttpClient(OkHttp) {
+        engine {
+            config {
+                connectionPool(ConnectionPool(5, keepAliveSeconds, TimeUnit.SECONDS))
+                retryOnConnectionFailure(true)
+            }
+        }
+    }
 
 internal fun secondsString(ms: Long): String = (ms / 1000.0).toString()
 
