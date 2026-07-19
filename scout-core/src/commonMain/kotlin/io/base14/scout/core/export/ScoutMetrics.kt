@@ -4,12 +4,18 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.addJsonObject
@@ -34,21 +40,80 @@ class ScoutMetricEmitter(
     private val resourceAttrs: Map<String, String>,
     private val scopeName: String,
     private val scopeVersion: String,
+    private val maxExportBatchSize: Int = 512,
+    private val maxQueueSize: Int = 2048,
+    private val exportIntervalSeconds: Int = 30,
+    private val maxRetries: Int = 0,
+    private val debug: Boolean = false,
 ) {
     private val url = endpoint.trimEnd('/') + "/v1/metrics"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+    private val mutex = Mutex()
+    private val buffer = ArrayList<MetricPoint>()
+
+    private val ticker: Job = scope.launch {
+        val intervalMs = exportIntervalSeconds.coerceAtLeast(1) * 1000L
+        while (isActive) {
+            delay(intervalMs)
+            drainAndSend()
+        }
+    }
+
     fun emit(points: List<MetricPoint>) {
         if (points.isEmpty()) return
-        val body = serialize(points)
         scope.launch {
-            runCatching {
-                httpClient.post(url) {
-                    contentType(ContentType.Application.Json)
-                    extraHeaders.forEach { (k, v) -> header(k, v) }
-                    setBody(body)
+            val full =
+                mutex.withLock {
+                    for (p in points) {
+                        if (buffer.size >= maxQueueSize) buffer.removeAt(0)
+                        buffer.add(p)
+                    }
+                    buffer.size >= maxExportBatchSize
                 }
+            if (full) drainAndSend()
+        }
+    }
+
+    fun flush() {
+        scope.launch { drainAndSend() }
+    }
+
+    fun shutdown() {
+        ticker.cancel()
+        scope.launch { drainAndSend() }
+    }
+
+    private suspend fun drainAndSend() {
+        val batch =
+            mutex.withLock {
+                if (buffer.isEmpty()) return
+                val b = ArrayList(buffer)
+                buffer.clear()
+                b
             }
+        sendWithRetry(batch)
+    }
+
+    private suspend fun sendWithRetry(points: List<MetricPoint>) {
+        val body = serialize(points)
+        var attempt = 0
+        while (attempt <= maxRetries.coerceAtLeast(0)) {
+            val ok =
+                runCatching {
+                    val response: HttpResponse =
+                        httpClient.post(url) {
+                            contentType(ContentType.Application.Json)
+                            extraHeaders.forEach { (k, v) -> header(k, v) }
+                            setBody(body)
+                        }
+                    if (debug) println("SCOUTDBG metrics n=${points.size} -> $url status=${response.status.value}")
+                    response.status.value in 200..299
+                }.onFailure {
+                    if (debug) println("SCOUTDBG metrics n=${points.size} -> $url EXCEPTION ${it::class.simpleName}: ${it.message}")
+                }.getOrDefault(false)
+            if (ok) return
+            attempt++
         }
     }
 

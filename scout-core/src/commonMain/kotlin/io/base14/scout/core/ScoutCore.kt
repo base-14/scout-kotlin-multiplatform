@@ -67,12 +67,17 @@ class ScoutCore(
         }
         tracerProvider {
             export {
-                val exporter = ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient)
+                val exporter = ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging)
                 val dir = cacheDir
-                if (dir != null) {
+                if (config.offlineBufferEnabled && dir != null) {
                     persistingSpanProcessor(ScoutNoopSpanProcessor, exporter, dir)
                 } else {
-                    batchSpanProcessor(exporter)
+                    batchSpanProcessor(
+                        exporter,
+                        maxQueueSize = config.effectiveMaxQueueSize,
+                        scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
+                        maxExportBatchSize = config.effectiveMaxExportBatchSize,
+                    )
                 }
             }
         }
@@ -80,7 +85,10 @@ class ScoutCore(
             loggerProvider {
                 export {
                     batchLogRecordProcessor(
-                        ScoutOtlpJsonLogRecordExporter(config.endpoint, exportHeaders(), httpClient),
+                        ScoutOtlpJsonLogRecordExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging),
+                        maxQueueSize = config.effectiveMaxQueueSize,
+                        scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
+                        maxExportBatchSize = config.effectiveMaxExportBatchSize,
                     )
                 }
             }
@@ -100,6 +108,11 @@ class ScoutCore(
         resourceAttrs = resourceAttrs + (ScoutResourceAttributes.SERVICE_NAME to config.serviceName),
         scopeName = SCOUT_SCOPE_NAME,
         scopeVersion = SCOUT_SDK_VERSION,
+        maxExportBatchSize = config.effectiveMaxExportBatchSize,
+        maxQueueSize = config.effectiveMaxQueueSize,
+        exportIntervalSeconds = config.effectiveMetricExportIntervalSeconds,
+        maxRetries = config.effectiveMaxRetries,
+        debug = config.debugLogging,
     )
 
     private val resurrector = SpanResurrector(config.endpoint, exportHeaders(), httpClient)

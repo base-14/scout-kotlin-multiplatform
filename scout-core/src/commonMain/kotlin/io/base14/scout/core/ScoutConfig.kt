@@ -28,6 +28,21 @@ data class ScoutConfig(
     val enableStartupTracking: Boolean = true,
     val enableLogging: Boolean = true,
     val enableMetrics: Boolean = true,
+    val enableMemoryMetrics: Boolean = false,
+    val enableCpuMetrics: Boolean = false,
+    val enableFrameMetrics: Boolean = false,
+
+    val exportIntervalSeconds: Int = 30,
+    val maxExportBatchSize: Int = 512,
+    val maxQueueSize: Int = 2048,
+    val maxRetries: Int = 0,
+    val metricExportIntervalSeconds: Int? = null,
+    val vitalsCollectionIntervalSeconds: Int = 60,
+
+    val offlineBufferEnabled: Boolean = false,
+    val offlineMaxTraceItems: Int = 0,
+    val offlineMaxMetricItems: Int = 0,
+    val offlineMaxLogItems: Int = 0,
 
     val anrThresholdMs: Long = 5_000,
     val longTaskThresholdMs: Long = 100,
@@ -41,6 +56,14 @@ data class ScoutConfig(
 
     val debugLogging: Boolean = false,
 ) {
+    val effectiveExportIntervalSeconds: Int get() = exportIntervalSeconds.coerceAtLeast(1)
+    val effectiveMaxExportBatchSize: Int get() = maxExportBatchSize.coerceAtLeast(1)
+    val effectiveMaxQueueSize: Int get() = maxQueueSize.coerceAtLeast(1)
+    val effectiveMaxRetries: Int get() = maxRetries.coerceAtLeast(0)
+    val effectiveVitalsCollectionIntervalSeconds: Int get() = vitalsCollectionIntervalSeconds.coerceAtLeast(1)
+    val effectiveMetricExportIntervalSeconds: Int
+        get() = (metricExportIntervalSeconds ?: exportIntervalSeconds).coerceAtLeast(1)
+
     init {
         require(serviceName.isNotBlank()) { "ScoutConfig.serviceName must not be blank" }
         require(endpoint.isNotBlank()) { "ScoutConfig.endpoint must not be blank" }

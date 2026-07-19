@@ -15,6 +15,7 @@ class ScoutOtlpJsonLogRecordExporter(
     endpoint: String,
     private val extraHeaders: Map<String, String>,
     private val httpClient: HttpClient,
+    private val debug: Boolean = false,
 ) : LogRecordExporter {
 
     private val url = endpoint.trimEnd('/') + "/v1/logs"
@@ -27,8 +28,10 @@ class ScoutOtlpJsonLogRecordExporter(
                 extraHeaders.forEach { (k, v) -> header(k, v) }
                 setBody(OtlpJsonLogSerializer.serialize(telemetry))
             }
+            if (debug) println("SCOUTDBG logs n=${telemetry.size} -> $url status=${response.status.value}")
             if (response.status.value in 200..299) OperationResultCode.Success else OperationResultCode.Failure
         } catch (t: Throwable) {
+            if (debug) println("SCOUTDBG logs n=${telemetry.size} -> $url EXCEPTION ${t::class.simpleName}: ${t.message}")
             OperationResultCode.Failure
         }
     }
