@@ -44,6 +44,13 @@ actual object Scout {
         AndroidScout.clearFeatureFlags()
     }
 
+    actual fun reportError(throwable: Throwable) {
+        AndroidScout.reportError(throwable)
+    }
+    actual fun reportError(type: String, message: String, stackTrace: String) {
+        AndroidScout.reportError(type, message, stackTrace)
+    }
+
     actual fun addTiming(name: String) {
         AndroidScout.addTiming(name)
     }

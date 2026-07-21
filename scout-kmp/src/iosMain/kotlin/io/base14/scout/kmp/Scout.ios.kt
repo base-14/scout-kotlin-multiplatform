@@ -39,6 +39,17 @@ actual object Scout {
         ScoutEngine.clearFeatureFlags()
     }
 
+    actual fun reportError(throwable: Throwable) {
+        ScoutEngine.reportError(
+            type = throwable::class.simpleName ?: "Throwable",
+            message = throwable.message ?: "",
+            stackTrace = throwable.stackTraceToString(),
+        )
+    }
+    actual fun reportError(type: String, message: String, stackTrace: String) {
+        ScoutEngine.reportError(type, message, stackTrace)
+    }
+
     actual fun addTiming(name: String) {
         ScoutEngine.addTiming(name)
     }

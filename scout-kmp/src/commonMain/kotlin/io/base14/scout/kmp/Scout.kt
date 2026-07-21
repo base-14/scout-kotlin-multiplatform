@@ -30,6 +30,10 @@ expect object Scout {
     fun setFeatureFlag(name: String, value: String)
     fun clearFeatureFlags()
 
+    // Errors
+    fun reportError(throwable: Throwable)
+    fun reportError(type: String, message: String, stackTrace: String)
+
     // Timings / vitals / operations
     fun addTiming(name: String)
     fun startVital(name: String)
