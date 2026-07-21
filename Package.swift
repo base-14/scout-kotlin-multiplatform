@@ -15,21 +15,17 @@ let package = Package(
         .library(name: "Scout", targets: ["ScoutKit"]),
         .library(name: "ScoutNative", targets: ["ScoutNative"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/kstenerud/KSCrash.git", exact: "2.5.1"),
-    ],
+    dependencies: [],
     targets: [
         .binaryTarget(
             name: "ScoutNative",
-            url: "https://github.com/base-14/scout-kotlin-multiplatform/releases/download/ios-0.1.4/Scout.xcframework.zip",
-            checksum: "bac7b5e723c7db7ad8c13b247131195738fe5a7d1c8d01f848ded363a5db9299"
+            url: "https://github.com/base-14/scout-kotlin-multiplatform/releases/download/ios-0.1.5/Scout.xcframework.zip",
+            checksum: "0000000000000000000000000000000000000000000000000000000000000000"
         ),
         .target(
             name: "ScoutKit",
             dependencies: [
                 "ScoutNative",
-                .product(name: "Recording", package: "KSCrash"),
-                .product(name: "Installations", package: "KSCrash"),
             ],
             path: "scout-ios/ScoutKit"
         ),

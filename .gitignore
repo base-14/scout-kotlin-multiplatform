@@ -35,6 +35,7 @@ DerivedData/
 Pods/
 .build/
 .swiftpm/
+Package.resolved
 
 # Logs & tmp
 *.log
