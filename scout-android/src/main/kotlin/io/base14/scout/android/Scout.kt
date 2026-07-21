@@ -142,6 +142,15 @@ object Scout {
     }
 
     @JvmStatic
+    fun reportError(
+        type: String,
+        message: String,
+        stackTrace: String,
+    ) {
+        core?.let { CrashInstrumentation.reportHandled(it, type, message, stackTrace) }
+    }
+
+    @JvmStatic
     @JvmOverloads
     fun setAccount(
         id: String,

@@ -67,6 +67,30 @@ internal class CrashInstrumentation(private val core: ScoutCore) {
             )
         }
 
+        fun reportHandled(
+            core: ScoutCore,
+            type: String,
+            message: String,
+            stackTrace: String,
+        ) {
+            core.emit(
+                ScoutSpans.ERROR,
+                mapOf(
+                    ScoutAttributes.ERROR_ID to randomUuidString(),
+                    ScoutAttributes.ERROR_TYPE to type,
+                    ScoutAttributes.ERROR_MESSAGE to message.ifBlank { type },
+                    ScoutAttributes.ERROR_STACK_TRACE to stackTrace,
+                    ScoutAttributes.ERROR_HANDLED to "true",
+                    ScoutAttributes.ERROR_HANDLING to "handled",
+                    ScoutAttributes.ERROR_SOURCE_TYPE to "android",
+                    ScoutAttributes.ERROR_FINGERPRINT to crashFingerprint(type, message, stackTrace),
+                    ScoutAttributes.ERROR_TIME_SINCE_APP_START_MS to core.msSinceInit().toString(),
+                    ScoutAttributes.BREADCRUMBS to core.breadcrumbs.toJson(),
+                ),
+                errorMessage = message.ifBlank { type },
+            )
+        }
+
         fun crashFingerprint(
             type: String,
             message: String,
