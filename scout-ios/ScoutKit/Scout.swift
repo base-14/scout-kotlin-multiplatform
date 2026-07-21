@@ -27,11 +27,6 @@ public enum Scout {
         offlineBufferEnabled: Bool = false,
         anrThresholdMs: Double = 5000
     ) {
-        // Arm the crash handler before anything else so an early crash is still captured.
-        if enableCrashReporting {
-            ScoutCrashReporter.install()
-        }
-
         ScoutEngine.shared.configure(
             serviceName: serviceName,
             endpoint: endpoint,
@@ -54,26 +49,17 @@ public enum Scout {
             metricExportIntervalSeconds: -1,
             offlineMaxTraceItems: 0,
             offlineMaxMetricItems: 0,
-            offlineMaxLogItems: 0
+            offlineMaxLogItems: 0,
+            enableAnrTracking: false,
+            anrThresholdMs: Int64(anrThresholdMs),
+            enableCrashTracking: enableCrashReporting
         )
 
-        // Now that the engine exists, emit any crash captured on the previous run and start
-        // the main-thread hang watchdog.
+        // Crash capture (KSCrash) lives inside the engine now; ScoutKit keeps the
+        // richer mach-backtrace hang watchdog and MetricKit subscription.
         if enableCrashReporting {
-            ScoutCrashReporter.drainPending()
             AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
             MetricKitSubscriber.shared.start()
-        }
-        if enableHttpTracking { HttpTracking.install() }
-        if enableScreenTracking { ScreenTracking.install() }
-        if enableTapTracking { TapTracking.install() }
-        if enableMetrics {
-            MetricsCollector.shared.start(
-                memoryEnabled: enableMemoryMetrics,
-                cpuEnabled: enableCpuMetrics,
-                intervalSeconds: vitalsCollectionIntervalSeconds
-            )
-            FrameWatcher.shared.start()
         }
     }
 
@@ -99,7 +85,6 @@ public enum Scout {
         offlineMaxMetricItems: Int = 0,
         offlineMaxLogItems: Int = 0
     ) {
-        ScoutCrashReporter.install()
         ScoutEngine.shared.configure(
             serviceName: serviceName,
             endpoint: endpoint,
@@ -122,9 +107,11 @@ public enum Scout {
             metricExportIntervalSeconds: Int32(metricExportIntervalSeconds),
             offlineMaxTraceItems: Int32(offlineMaxTraceItems),
             offlineMaxMetricItems: Int32(offlineMaxMetricItems),
-            offlineMaxLogItems: Int32(offlineMaxLogItems)
+            offlineMaxLogItems: Int32(offlineMaxLogItems),
+            enableAnrTracking: false,
+            anrThresholdMs: Int64(anrThresholdMs),
+            enableCrashTracking: true
         )
-        ScoutCrashReporter.drainPending()
         AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
     }
 

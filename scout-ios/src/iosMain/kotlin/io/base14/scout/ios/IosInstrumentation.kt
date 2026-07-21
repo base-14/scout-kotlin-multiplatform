@@ -17,11 +17,32 @@ internal class IosInstrumentation(
     private val processStartNanos: Long,
 ) {
     private var lastState: String = "inactive"
+    private var anrWatchdog: IosAnrWatchdog? = null
 
     fun start() {
         if (core.config.enableStartupTracking) {
             emitStartup()
         }
+        if (core.config.enableAnrTracking) {
+            anrWatchdog = IosAnrWatchdog(core.config.anrThresholdMs) { durationMs, stack ->
+                ScoutEngine.reportAnr(durationMs, stack)
+            }.also { it.start() }
+        }
+        if (core.config.enableTapTracking) {
+            IosTapTracking.install()
+        }
+        if (core.config.enableHttpTracking) {
+            IosHttpTracking.install()
+        }
+        IosFrameWatcher.start()
+        if (core.config.enableScreenTracking) {
+            IosScreenTracking.install()
+        }
+        IosMetricsCollector.start(
+            memoryEnabled = core.config.enableMemoryMetrics,
+            cpuEnabled = core.config.enableCpuMetrics,
+            intervalSeconds = core.config.effectiveVitalsCollectionIntervalSeconds,
+        )
         val center = NSNotificationCenter.defaultCenter
         val queue = NSOperationQueue.mainQueue
         center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, queue) { _ ->
@@ -35,6 +56,8 @@ internal class IosInstrumentation(
     }
 
     private fun emitStartup() {
+        val durMs = (epochNanos() - processStartNanos) / 1_000_000L
+        core.addBreadcrumb("startup", "cold ${durMs}ms")
         core.emit(
             name = ScoutSpans.APP_STARTUP,
             startNanos = processStartNanos,
@@ -45,6 +68,7 @@ internal class IosInstrumentation(
     private fun emitLifecycle(state: String) {
         val previous = lastState
         lastState = state
+        core.addBreadcrumb("lifecycle", state)
         core.emit(
             name = ScoutSpans.APP_LIFECYCLE_CHANGED,
             attributes = mapOf(

@@ -26,10 +26,22 @@ kotlin {
     val xcf = XCFramework("Scout")
     val iosTargets = listOf(iosArm64(), iosSimulatorArm64())
     iosTargets.forEach { target ->
+        val libDir =
+            if (target.name == "iosArm64") {
+                project.file("vendor/kscrash/lib-ios").absolutePath
+            } else {
+                project.file("vendor/kscrash/lib-sim").absolutePath
+            }
+        target.compilations.getByName("main").cinterops.create("kscrash") {
+            definitionFile.set(project.file("src/nativeInterop/cinterop/kscrash.def"))
+            includeDirs(project.file("vendor/kscrash/include"))
+            extraOpts("-libraryPath", libDir)
+        }
         target.binaries.framework {
             baseName = "Scout"
             isStatic = false
             export(coreDependency)
+            linkerOpts("-L$libDir", "-lc++", "-lz")
             xcf.add(this)
         }
     }

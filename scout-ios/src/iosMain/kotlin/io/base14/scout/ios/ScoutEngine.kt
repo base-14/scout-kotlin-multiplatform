@@ -60,6 +60,9 @@ object ScoutEngine {
         offlineMaxTraceItems: Int = 0,
         offlineMaxMetricItems: Int = 0,
         offlineMaxLogItems: Int = 0,
+        enableAnrTracking: Boolean = true,
+        anrThresholdMs: Long = 5_000,
+        enableCrashTracking: Boolean = true,
     ) {
         initialize(
             ScoutConfig(
@@ -85,12 +88,16 @@ object ScoutEngine {
                 offlineMaxTraceItems = offlineMaxTraceItems,
                 offlineMaxMetricItems = offlineMaxMetricItems,
                 offlineMaxLogItems = offlineMaxLogItems,
+                enableAnrTracking = enableAnrTracking,
+                anrThresholdMs = anrThresholdMs,
+                enableCrashTracking = enableCrashTracking,
             ),
         )
     }
 
     fun initialize(config: ScoutConfig) {
         if (core != null) return
+        if (config.enableCrashTracking) IosCrashReporter.install()
         collectorEndpoint = config.endpoint
         val created = ScoutCore(
             config = config,
@@ -106,6 +113,7 @@ object ScoutEngine {
             m
         }
         instrumentation = IosInstrumentation(created, processStartNanos).also { it.start() }
+        if (config.enableCrashTracking) runCatching { IosCrashReporter.drainPending() }
     }
 
     private var currentScreenSpan: ScoutCore.ScoutSpan? = null
@@ -239,6 +247,7 @@ object ScoutEngine {
     }
 
     fun reportAnr(durationMs: Long, mainThreadStack: String) {
+        core?.addBreadcrumb("anr", "App not responding: ${durationMs}ms")
         val attrs = LinkedHashMap<String, Any>()
         attrs[ScoutAttributes.CRASH_TYPE] = "anr"
         attrs[ScoutAttributes.ERROR_MESSAGE] = "Application Not Responding"

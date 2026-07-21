@@ -1,0 +1,5 @@
+language = Objective-C
+package = io.base14.scout.kscrash
+headers = KSCrash.h KSCrashConfiguration.h KSCrashMonitorType.h KSCrashReportStore.h KSCrashReport.h KSCrashError.h
+staticLibraries = libKSCrashRecording.a
+linkerOpts = -lc++ -lz

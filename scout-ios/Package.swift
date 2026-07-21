@@ -16,9 +16,7 @@ let package = Package(
         .library(name: "Scout", targets: ["ScoutKit"]),
         .library(name: "ScoutNative", targets: ["ScoutNative"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/kstenerud/KSCrash.git", exact: "2.5.1"),
-    ],
+    dependencies: [],
     targets: [
         .binaryTarget(
             name: "ScoutNative",
@@ -28,8 +26,6 @@ let package = Package(
             name: "ScoutKit",
             dependencies: [
                 "ScoutNative",
-                .product(name: "Recording", package: "KSCrash"),
-                .product(name: "Installations", package: "KSCrash"),
             ],
             path: "ScoutKit"
         ),
@@ -37,7 +33,6 @@ let package = Package(
             name: "ScoutKitTests",
             dependencies: [
                 "ScoutKit",
-                .product(name: "Recording", package: "KSCrash"),
             ],
             path: "ScoutKitTests"
         ),
