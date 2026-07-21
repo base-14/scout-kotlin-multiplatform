@@ -49,7 +49,12 @@ jobs:
       - name: Create GitHub Release + upload xcframework
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" "${{ steps.xcf.outputs.zip }}" --generate-notes
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${{ steps.xcf.outputs.zip }}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${{ steps.xcf.outputs.zip }}" --generate-notes
+          fi
 
       - name: Pin Package.swift to the released xcframework and move the tag
         run: |
