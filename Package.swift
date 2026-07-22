@@ -19,8 +19,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "ScoutNative",
-            url: "https://github.com/base-14/scout-kotlin-multiplatform/releases/download/ios-0.1.6/Scout.xcframework.zip",
-            checksum: "0d49776f8501a30ad9075e5d84b222c91dba7bf6d0b4566c24a0f6078453b0ad"
+            url: "https://github.com/base-14/scout-kotlin-multiplatform/releases/download/ios-0.1.7/Scout.xcframework.zip",
+            checksum: "8cb7fab23efb306f754162ac695de1a6c94746d1e67d57cc85f4ae8f2a6c2e1f"
         ),
         .target(
             name: "ScoutKit",
