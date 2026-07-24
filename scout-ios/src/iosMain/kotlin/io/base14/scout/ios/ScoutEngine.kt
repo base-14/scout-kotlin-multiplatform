@@ -27,6 +27,8 @@ object ScoutEngine {
     var collectorEndpoint: String = ""
         private set
 
+    internal fun ignoreUrlPatterns(): List<String> = core?.config?.ignoreUrlPatterns ?: emptyList()
+
     fun configure(
         serviceName: String,
         endpoint: String,
@@ -37,6 +39,7 @@ object ScoutEngine {
         configure(serviceName, endpoint, environment, headers, sessionSampleRate, true, true, true)
     }
 
+    @Suppress("LongParameterList")
     fun configure(
         serviceName: String,
         endpoint: String,
@@ -63,18 +66,48 @@ object ScoutEngine {
         enableAnrTracking: Boolean = true,
         anrThresholdMs: Long = 5_000,
         enableCrashTracking: Boolean = true,
+        serviceVersion: String? = null,
+        alwaysCaptureErrors: Boolean = true,
+        sessionTimeoutMinutes: Int = 30,
+        maxSessionDurationMinutes: Int = 60,
+        firstPartyHosts: List<String> = emptyList(),
+        ignoreUrlPatterns: List<String> = emptyList(),
+        enableHttpTracking: Boolean = true,
+        enableErrorTracking: Boolean = true,
+        enableJankTracking: Boolean = true,
+        enableLifecycleTracking: Boolean = true,
+        enableLogging: Boolean = true,
+        enableMetrics: Boolean = true,
+        longTaskThresholdMs: Long = 100,
+        frozenFrameThresholdMs: Long = 700,
+        maxOfflineStorageMb: Int = 5,
+        debugLogging: Boolean = false,
     ) {
         initialize(
             ScoutConfig(
                 serviceName = serviceName,
                 endpoint = endpoint,
+                serviceVersion = serviceVersion,
                 environment = environment,
                 headers = headers,
+                resourceAttributes = resourceAttributes,
                 sessionSampleRate = sessionSampleRate,
+                alwaysCaptureErrors = alwaysCaptureErrors,
+                sessionTimeoutMinutes = sessionTimeoutMinutes,
+                maxSessionDurationMinutes = maxSessionDurationMinutes,
+                firstPartyHosts = firstPartyHosts,
+                ignoreUrlPatterns = ignoreUrlPatterns,
                 enableScreenTracking = enableScreenTracking,
                 enableTapTracking = enableTapTracking,
+                enableHttpTracking = enableHttpTracking,
+                enableErrorTracking = enableErrorTracking,
+                enableCrashTracking = enableCrashTracking,
+                enableAnrTracking = enableAnrTracking,
+                enableJankTracking = enableJankTracking,
+                enableLifecycleTracking = enableLifecycleTracking,
                 enableStartupTracking = enableStartupTracking,
-                resourceAttributes = resourceAttributes,
+                enableLogging = enableLogging,
+                enableMetrics = enableMetrics,
                 enableMemoryMetrics = enableMemoryMetrics,
                 enableCpuMetrics = enableCpuMetrics,
                 enableFrameMetrics = enableFrameMetrics,
@@ -82,15 +115,17 @@ object ScoutEngine {
                 maxExportBatchSize = maxExportBatchSize,
                 maxQueueSize = maxQueueSize,
                 maxRetries = maxRetries,
+                metricExportIntervalSeconds = metricExportIntervalSeconds.takeIf { it > 0 },
                 vitalsCollectionIntervalSeconds = vitalsCollectionIntervalSeconds,
                 offlineBufferEnabled = offlineBufferEnabled,
-                metricExportIntervalSeconds = metricExportIntervalSeconds.takeIf { it > 0 },
                 offlineMaxTraceItems = offlineMaxTraceItems,
                 offlineMaxMetricItems = offlineMaxMetricItems,
                 offlineMaxLogItems = offlineMaxLogItems,
-                enableAnrTracking = enableAnrTracking,
                 anrThresholdMs = anrThresholdMs,
-                enableCrashTracking = enableCrashTracking,
+                longTaskThresholdMs = longTaskThresholdMs,
+                frozenFrameThresholdMs = frozenFrameThresholdMs,
+                maxOfflineStorageMb = maxOfflineStorageMb,
+                debugLogging = debugLogging,
             ),
         )
     }
@@ -218,6 +253,47 @@ object ScoutEngine {
         return if (path.isEmpty()) "/" else "/$path"
     }
 
+    fun beginHttp(method: String, url: String, startNanos: Long): ScoutCore.ScoutSpan? =
+        core?.beginSpan(
+            name = ScoutSpans.HTTP_REQUEST,
+            attributes = mapOf(ScoutAttributes.HTTP_METHOD to method, ScoutAttributes.URL_FULL to url),
+            startNanos = startNanos,
+            isClient = true,
+        )
+
+    fun endHttp(
+        span: ScoutCore.ScoutSpan,
+        method: String,
+        url: String,
+        statusCode: Long,
+        responseSize: Long,
+        errorMessage: String?,
+        startEpochNanos: Long,
+        endEpochNanos: Long,
+    ) {
+        val attrs = LinkedHashMap<String, Any>()
+        attrs[ScoutAttributes.HTTP_STATUS_CODE] = statusCode.toString()
+        attrs[ScoutAttributes.HTTP_BODY_SIZE] = (if (responseSize < 0) 0 else responseSize).toString()
+        attrs[ScoutAttributes.HTTP_DURATION_MS] = ((endEpochNanos - startEpochNanos) / 1_000_000L).toString()
+        attrs[ScoutAttributes.HTTP_ROUTE] = routeOf(url)
+        errorMessage?.takeIf { it.isNotEmpty() }?.let { attrs[ScoutAttributes.HTTP_ERROR] = it }
+        span.end(endNanos = endEpochNanos, attributes = attrs, errorMessage = errorMessage?.takeIf { it.isNotEmpty() })
+        core?.addBreadcrumb("http", "$method $url")
+    }
+
+    fun firstPartyTraceparent(host: String?, span: ScoutCore.ScoutSpan): String? {
+        if (host == null) return null
+        val hosts = core?.config?.firstPartyHosts ?: return null
+        val match = hosts.any { pattern ->
+            if (pattern.startsWith("*.")) {
+                host == pattern.substring(2) || host.endsWith(pattern.substring(1))
+            } else {
+                host == pattern
+            }
+        }
+        return if (match) span.traceparent else null
+    }
+
     fun reportNativeCrash(attributes: Map<String, String>) {
         val attrs = LinkedHashMap<String, Any>(attributes)
         // The crash killed the previous session, so use that session's persisted breadcrumb trail.
@@ -264,6 +340,7 @@ object ScoutEngine {
     }
 
     fun reportError(type: String, message: String, stackTrace: String) {
+        if (core?.config?.enableErrorTracking != true) return
         // Record the error as a breadcrumb first, then attach the trail (matches scout-flutter).
         core?.addBreadcrumb("error", message.ifEmpty { type })
         core?.emit(

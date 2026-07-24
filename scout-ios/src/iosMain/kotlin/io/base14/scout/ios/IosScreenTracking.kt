@@ -71,7 +71,9 @@ internal object IosScreenTracking {
         ) {
             return
         }
-        val name = vc.`class`()?.let { NSStringFromClass(it) }?.substringAfterLast('.') ?: "Screen"
+        val raw = vc.`class`()?.let { NSStringFromClass(it) } ?: "Screen"
+        if (raw.substringAfterLast('.') == "FlutterViewController") return
+        val name = cleanScreenName(raw)
         ScoutEngine.setScreen(name)
         loadStarts.remove(vc.hash().toLong())?.let { start ->
             val ms = ((CACurrentMediaTime() - start) * 1000.0).toLong()

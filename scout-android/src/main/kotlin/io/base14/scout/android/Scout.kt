@@ -138,7 +138,7 @@ object Scout {
         throwable: Throwable,
         handled: Boolean = true,
     ) {
-        core?.let { CrashInstrumentation.reportHandled(it, throwable, handled) }
+        core?.let { if (it.config.enableErrorTracking) CrashInstrumentation.reportHandled(it, throwable, handled) }
     }
 
     @JvmStatic
@@ -147,7 +147,7 @@ object Scout {
         message: String,
         stackTrace: String,
     ) {
-        core?.let { CrashInstrumentation.reportHandled(it, type, message, stackTrace) }
+        core?.let { if (it.config.enableErrorTracking) CrashInstrumentation.reportHandled(it, type, message, stackTrace) }
     }
 
     @JvmStatic

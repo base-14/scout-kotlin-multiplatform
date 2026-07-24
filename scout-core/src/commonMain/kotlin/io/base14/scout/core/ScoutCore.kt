@@ -6,6 +6,7 @@ import io.base14.scout.core.export.MetricPoint
 import io.base14.scout.core.export.OtlpJsonSerializer
 import io.base14.scout.core.export.ScoutLogLevel
 import io.base14.scout.core.export.ScoutMetricEmitter
+import io.base14.scout.core.export.ScoutNoopLogRecordProcessor
 import io.base14.scout.core.export.ScoutNoopSpanProcessor
 import io.base14.scout.core.export.ScoutOtlpJsonLogRecordExporter
 import io.base14.scout.core.export.ScoutOtlpJsonSpanExporter
@@ -30,6 +31,7 @@ import io.opentelemetry.kotlin.createOpenTelemetry
 import io.opentelemetry.kotlin.logging.Logger
 import io.opentelemetry.kotlin.logging.SeverityNumber
 import io.opentelemetry.kotlin.logging.export.batchLogRecordProcessor
+import io.opentelemetry.kotlin.logging.export.persistingLogRecordProcessor
 import io.opentelemetry.kotlin.tracing.Span
 import io.opentelemetry.kotlin.tracing.SpanKind
 import io.opentelemetry.kotlin.tracing.StatusData
@@ -67,10 +69,18 @@ class ScoutCore(
         }
         tracerProvider {
             export {
-                val exporter = ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging)
+                val exporter =
+                    ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging, config.effectiveMaxRetries)
                 val dir = cacheDir
                 if (config.offlineBufferEnabled && dir != null) {
-                    persistingSpanProcessor(ScoutNoopSpanProcessor, exporter, dir)
+                    persistingSpanProcessor(
+                        ScoutNoopSpanProcessor,
+                        exporter,
+                        dir,
+                        maxQueueSize = config.effectiveMaxQueueSize,
+                        scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
+                        maxExportBatchSize = config.effectiveMaxExportBatchSize,
+                    )
                 } else {
                     batchSpanProcessor(
                         exporter,
@@ -84,12 +94,32 @@ class ScoutCore(
         if (config.enableLogging) {
             loggerProvider {
                 export {
-                    batchLogRecordProcessor(
-                        ScoutOtlpJsonLogRecordExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging),
-                        maxQueueSize = config.effectiveMaxQueueSize,
-                        scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
-                        maxExportBatchSize = config.effectiveMaxExportBatchSize,
-                    )
+                    val logExporter =
+                        ScoutOtlpJsonLogRecordExporter(
+                            config.endpoint,
+                            exportHeaders(),
+                            httpClient,
+                            config.debugLogging,
+                            config.effectiveMaxRetries,
+                        )
+                    val dir = cacheDir
+                    if (config.offlineBufferEnabled && dir != null) {
+                        persistingLogRecordProcessor(
+                            ScoutNoopLogRecordProcessor,
+                            logExporter,
+                            dir,
+                            maxQueueSize = config.effectiveMaxQueueSize,
+                            scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
+                            maxExportBatchSize = config.effectiveMaxExportBatchSize,
+                        )
+                    } else {
+                        batchLogRecordProcessor(
+                            logExporter,
+                            maxQueueSize = config.effectiveMaxQueueSize,
+                            scheduleDelayMs = config.effectiveExportIntervalSeconds * 1000L,
+                            maxExportBatchSize = config.effectiveMaxExportBatchSize,
+                        )
+                    }
                 }
             }
         }

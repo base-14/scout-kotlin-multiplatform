@@ -34,7 +34,12 @@ internal class IosInstrumentation(
         if (core.config.enableHttpTracking) {
             IosHttpTracking.install()
         }
-        IosFrameWatcher.start()
+        if (core.config.enableJankTracking) {
+            IosFrameWatcher.start(
+                longTaskMs = core.config.longTaskThresholdMs.toDouble(),
+                frozenMs = core.config.frozenFrameThresholdMs.toDouble(),
+            )
+        }
         if (core.config.enableScreenTracking) {
             IosScreenTracking.install()
         }
@@ -43,15 +48,17 @@ internal class IosInstrumentation(
             cpuEnabled = core.config.enableCpuMetrics,
             intervalSeconds = core.config.effectiveVitalsCollectionIntervalSeconds,
         )
-        val center = NSNotificationCenter.defaultCenter
-        val queue = NSOperationQueue.mainQueue
-        center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, queue) { _ ->
-            core.sessionManager.onForeground()
-            emitLifecycle("active")
-        }
-        center.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, queue) { _ ->
-            core.sessionManager.onBackground()
-            emitLifecycle("background")
+        if (core.config.enableLifecycleTracking) {
+            val center = NSNotificationCenter.defaultCenter
+            val queue = NSOperationQueue.mainQueue
+            center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, queue) { _ ->
+                core.sessionManager.onForeground()
+                emitLifecycle("active")
+            }
+            center.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, queue) { _ ->
+                core.sessionManager.onBackground()
+                emitLifecycle("background")
+            }
         }
     }
 

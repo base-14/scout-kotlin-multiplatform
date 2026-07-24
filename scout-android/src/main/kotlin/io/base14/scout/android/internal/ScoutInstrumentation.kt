@@ -26,7 +26,7 @@ internal object ScoutInstrumentation {
         if (config.enableLifecycleTracking) safe { LifecycleInstrumentation(core).install() }
         if (config.enableStartupTracking) safe { StartupInstrumentation(app, core).install() }
         if (config.enableScreenTracking) safe { ScreenInstrumentation(app, screenTracker).install() }
-        if (config.enableCrashTracking || config.enableErrorTracking) safe { CrashInstrumentation(core).install() }
+        if (config.enableCrashTracking) safe { CrashInstrumentation(core).install() }
         if (config.enableAnrTracking) safe { AnrInstrumentation(core).install() }
         if (config.enableCrashTracking) safe { NativeCrashHandler(app, core).install() }
         if (config.enableJankTracking) safe { JankInstrumentation(app, core).install() }

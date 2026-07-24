@@ -13,13 +13,13 @@ import platform.darwin.NSObject
  */
 @OptIn(ExperimentalForeignApi::class)
 internal object IosFrameWatcher {
-    private const val LONG_TASK_MS = 100.0
-    private const val FROZEN_MS = 700.0
     private var displayLink: CADisplayLink? = null
     private val target = Ticker()
 
-    fun start() {
+    fun start(longTaskMs: Double = 100.0, frozenMs: Double = 700.0) {
         if (displayLink != null) return
+        target.longTaskMs = longTaskMs
+        target.frozenMs = frozenMs
         val link = CADisplayLink.displayLinkWithTarget(target, platform.Foundation.NSSelectorFromString("scoutTick:"))
         link.addToRunLoop(NSRunLoop.mainRunLoop, forMode = NSRunLoopCommonModes)
         displayLink = link
@@ -33,6 +33,8 @@ internal object IosFrameWatcher {
 
     internal class Ticker : NSObject() {
         var lastTimestamp: Double = 0.0
+        var longTaskMs: Double = 100.0
+        var frozenMs: Double = 700.0
 
         @kotlinx.cinterop.ObjCAction
         fun scoutTick(link: CADisplayLink) {
@@ -40,9 +42,9 @@ internal object IosFrameWatcher {
             lastTimestamp = link.timestamp
             if (previous == 0.0) return
             val frameMs = (link.timestamp - previous) * 1000.0
-            if (frameMs >= FROZEN_MS) {
+            if (frameMs >= frozenMs) {
                 ScoutEngine.reportFrozenFrame(frameMs.toLong())
-            } else if (frameMs >= LONG_TASK_MS) {
+            } else if (frameMs >= longTaskMs) {
                 ScoutEngine.reportLongTask(frameMs.toLong())
             }
         }

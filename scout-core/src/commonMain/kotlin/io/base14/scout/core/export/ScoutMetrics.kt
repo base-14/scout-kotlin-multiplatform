@@ -92,7 +92,13 @@ class ScoutMetricEmitter(
                 buffer.clear()
                 b
             }
-        sendWithRetry(batch)
+        val cap = maxExportBatchSize.coerceAtLeast(1)
+        var i = 0
+        while (i < batch.size) {
+            val end = minOf(i + cap, batch.size)
+            sendWithRetry(batch.subList(i, end))
+            i = end
+        }
     }
 
     private suspend fun sendWithRetry(points: List<MetricPoint>) {

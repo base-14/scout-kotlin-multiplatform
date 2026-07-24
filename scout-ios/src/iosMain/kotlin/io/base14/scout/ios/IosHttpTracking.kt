@@ -1,6 +1,8 @@
 package io.base14.scout.ios
 
+import io.base14.scout.core.ScoutCore
 import kotlinx.cinterop.ExperimentalForeignApi
+import platform.Foundation.setValue
 import platform.Foundation.NSDate
 import platform.Foundation.NSError
 import platform.Foundation.NSHTTPURLResponse
@@ -45,7 +47,7 @@ internal object IosHttpTracking {
         NSURL.URLWithString(ScoutEngine.collectorEndpoint)?.host
 }
 
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, kotlinx.cinterop.BetaInteropApi::class)
 internal class ScoutUrlProtocol : NSURLProtocol, NSURLSessionDataDelegateProtocol {
     @kotlinx.cinterop.ObjCObjectBase.OverrideInit
     @Suppress("CONFLICTING_OVERLOADS")
@@ -55,6 +57,7 @@ internal class ScoutUrlProtocol : NSURLProtocol, NSURLSessionDataDelegateProtoco
     private var task: NSURLSessionDataTask? = null
     private var startNanos: Long = 0
     private var response: NSURLResponse? = null
+    private var httpSpan: ScoutCore.ScoutSpan? = null
 
     companion object : NSURLProtocolMeta() {
         override fun canInitWithRequest(request: NSURLRequest): Boolean {
@@ -64,6 +67,8 @@ internal class ScoutUrlProtocol : NSURLProtocol, NSURLSessionDataDelegateProtoco
             if (scheme != "http" && scheme != "https") return false
             val collector = IosHttpTracking.collectorHost()
             if (collector != null && url.host == collector) return false
+            val absolute = url.absoluteString ?: ""
+            if (ScoutEngine.ignoreUrlPatterns().any { it.isNotEmpty() && absolute.contains(it) }) return false
             return true
         }
 
@@ -74,6 +79,15 @@ internal class ScoutUrlProtocol : NSURLProtocol, NSURLSessionDataDelegateProtoco
         val mutable = request.mutableCopy() as NSMutableURLRequest
         NSURLProtocol.setProperty(true, forKey = IosHttpTracking.HANDLED_KEY, inRequest = mutable)
         startNanos = IosHttpTracking.nowEpochNanos()
+        val method = (this.request.valueForKey("HTTPMethod") as? String) ?: "GET"
+        val span = ScoutEngine.beginHttp(method, request.URL?.absoluteString ?: "", startNanos)
+        httpSpan = span
+        if (span != null) {
+            val traceparent: String? = ScoutEngine.firstPartyTraceparent(request.URL?.host, span)
+            if (traceparent != null) {
+                mutable.setValue(traceparent, forHTTPHeaderField = "traceparent")
+            }
+        }
         val s = NSURLSession.sessionWithConfiguration(
             NSURLSessionConfiguration.defaultSessionConfiguration,
             delegate = this,
@@ -113,11 +127,14 @@ internal class ScoutUrlProtocol : NSURLProtocol, NSURLSessionDataDelegateProtoco
     }
 
     private fun emit(error: NSError?) {
+        val span = httpSpan ?: return
+        httpSpan = null
         val method = (this.request.valueForKey("HTTPMethod") as? String) ?: "GET"
         val url = request.URL?.absoluteString ?: ""
         val status = (response as? NSHTTPURLResponse)?.statusCode?.toLong()
             ?: if (error == null) 0L else -1L
-        ScoutEngine.reportHttp(
+        ScoutEngine.endHttp(
+            span = span,
             method = method,
             url = url,
             statusCode = status,

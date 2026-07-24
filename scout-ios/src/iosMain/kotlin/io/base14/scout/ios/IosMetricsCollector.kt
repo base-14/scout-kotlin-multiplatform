@@ -12,18 +12,18 @@ import kotlinx.cinterop.sizeOf
 import kotlinx.cinterop.value
 import platform.darwin.DISPATCH_QUEUE_PRIORITY_BACKGROUND
 import platform.darwin.KERN_SUCCESS
-import platform.darwin.MACH_TASK_BASIC_INFO
+import platform.darwin.TASK_VM_INFO
 import platform.darwin.TH_USAGE_SCALE
 import platform.darwin.THREAD_BASIC_INFO
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_global_queue
 import platform.darwin.integer_tVar
 import platform.darwin.mach_msg_type_number_tVar
-import platform.darwin.mach_task_basic_info
 import platform.darwin.mach_task_self_
 import platform.darwin.natural_t
 import platform.darwin.task_info
 import platform.darwin.task_threads
+import platform.darwin.task_vm_info
 import platform.darwin.thread_act_array_tVar
 import platform.darwin.thread_basic_info
 import platform.darwin.thread_info
@@ -68,24 +68,24 @@ internal object IosMetricsCollector {
 
     private fun sample() {
         if (memoryEnabled) {
-            residentMemoryBytes()?.let { ScoutEngine.emitGauge("process.memory.usage", it, "By") }
+            physFootprintBytes()?.let { ScoutEngine.emitGauge("process.memory.usage", it, "By") }
         }
         if (cpuEnabled) {
             ScoutEngine.emitGauge("process.cpu.usage", cpuUsagePercent(), "1")
         }
     }
 
-    private fun residentMemoryBytes(): Double? = memScoped {
-        val info = alloc<mach_task_basic_info>()
+    private fun physFootprintBytes(): Double? = memScoped {
+        val info = alloc<task_vm_info>()
         val count = alloc<mach_msg_type_number_tVar>()
-        count.value = (sizeOf<mach_task_basic_info>() / sizeOf<platform.darwin.natural_tVar>()).toUInt()
+        count.value = (sizeOf<task_vm_info>() / sizeOf<platform.darwin.natural_tVar>()).toUInt()
         val kr = task_info(
             mach_task_self_,
-            MACH_TASK_BASIC_INFO.toUInt(),
+            TASK_VM_INFO.toUInt(),
             info.ptr.reinterpret<integer_tVar>(),
             count.ptr,
         )
-        if (kr == KERN_SUCCESS) info.resident_size.toDouble() else null
+        if (kr == KERN_SUCCESS) info.phys_footprint.toDouble() else null
     }
 
     private fun cpuUsagePercent(): Double = memScoped {

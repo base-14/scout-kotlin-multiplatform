@@ -12,6 +12,7 @@ import java.io.IOException
 class ScoutOkHttpInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val core = Scout.coreInternal() ?: return chain.proceed(chain.request())
+        if (!core.config.enableHttpTracking) return chain.proceed(chain.request())
         val original = chain.request()
         val url = original.url.toString()
         if (url.startsWith(core.config.endpoint) || core.config.ignoreUrlPatterns.any { url.contains(it) }) {

@@ -8,13 +8,26 @@ public enum Scout {
     public static func start(
         serviceName: String,
         endpoint: String,
+        serviceVersion: String? = nil,
         environment: String? = nil,
         headers: [String: String] = [:],
+        resourceAttributes: [String: String] = [:],
         sessionSampleRate: Double = 1.0,
+        alwaysCaptureErrors: Bool = true,
+        sessionTimeoutMinutes: Int = 30,
+        maxSessionDurationMinutes: Int = 60,
+        firstPartyHosts: [String] = [],
+        ignoreUrlPatterns: [String] = [],
         enableCrashReporting: Bool = true,
         enableHttpTracking: Bool = true,
+        enableErrorTracking: Bool = true,
         enableScreenTracking: Bool = true,
         enableTapTracking: Bool = true,
+        enableAnrTracking: Bool = true,
+        enableJankTracking: Bool = true,
+        enableLifecycleTracking: Bool = true,
+        enableStartupTracking: Bool = true,
+        enableLogging: Bool = true,
         enableMetrics: Bool = true,
         enableMemoryMetrics: Bool = false,
         enableCpuMetrics: Bool = false,
@@ -23,9 +36,17 @@ public enum Scout {
         maxExportBatchSize: Int = 512,
         maxQueueSize: Int = 2048,
         maxRetries: Int = 0,
+        metricExportIntervalSeconds: Int = -1,
         vitalsCollectionIntervalSeconds: Int = 60,
         offlineBufferEnabled: Bool = false,
-        anrThresholdMs: Double = 5000
+        offlineMaxTraceItems: Int = 0,
+        offlineMaxMetricItems: Int = 0,
+        offlineMaxLogItems: Int = 0,
+        anrThresholdMs: Double = 5000,
+        longTaskThresholdMs: Int = 100,
+        frozenFrameThresholdMs: Int = 700,
+        maxOfflineStorageMb: Int = 5,
+        debugLogging: Bool = false
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -35,8 +56,8 @@ public enum Scout {
             sessionSampleRate: sessionSampleRate,
             enableScreenTracking: enableScreenTracking,
             enableTapTracking: enableTapTracking,
-            enableStartupTracking: true,
-            resourceAttributes: [:],
+            enableStartupTracking: enableStartupTracking,
+            resourceAttributes: resourceAttributes,
             enableMemoryMetrics: enableMemoryMetrics,
             enableCpuMetrics: enableCpuMetrics,
             enableFrameMetrics: enableFrameMetrics,
@@ -46,19 +67,35 @@ public enum Scout {
             maxRetries: Int32(maxRetries),
             vitalsCollectionIntervalSeconds: Int32(vitalsCollectionIntervalSeconds),
             offlineBufferEnabled: offlineBufferEnabled,
-            metricExportIntervalSeconds: -1,
-            offlineMaxTraceItems: 0,
-            offlineMaxMetricItems: 0,
-            offlineMaxLogItems: 0,
+            metricExportIntervalSeconds: Int32(metricExportIntervalSeconds),
+            offlineMaxTraceItems: Int32(offlineMaxTraceItems),
+            offlineMaxMetricItems: Int32(offlineMaxMetricItems),
+            offlineMaxLogItems: Int32(offlineMaxLogItems),
             enableAnrTracking: false,
             anrThresholdMs: Int64(anrThresholdMs),
-            enableCrashTracking: enableCrashReporting
+            enableCrashTracking: enableCrashReporting,
+            serviceVersion: serviceVersion,
+            alwaysCaptureErrors: alwaysCaptureErrors,
+            sessionTimeoutMinutes: Int32(sessionTimeoutMinutes),
+            maxSessionDurationMinutes: Int32(maxSessionDurationMinutes),
+            firstPartyHosts: firstPartyHosts,
+            ignoreUrlPatterns: ignoreUrlPatterns,
+            enableHttpTracking: enableHttpTracking,
+            enableErrorTracking: enableErrorTracking,
+            enableJankTracking: enableJankTracking,
+            enableLifecycleTracking: enableLifecycleTracking,
+            enableLogging: enableLogging,
+            enableMetrics: enableMetrics,
+            longTaskThresholdMs: Int64(longTaskThresholdMs),
+            frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
+            maxOfflineStorageMb: Int32(maxOfflineStorageMb),
+            debugLogging: debugLogging
         )
 
-        // Crash capture (KSCrash) lives inside the engine now; ScoutKit keeps the
-        // richer mach-backtrace hang watchdog and MetricKit subscription.
-        if enableCrashReporting {
+        if enableAnrTracking {
             AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
+        }
+        if enableCrashReporting {
             MetricKitSubscriber.shared.start()
         }
     }
@@ -83,7 +120,28 @@ public enum Scout {
         metricExportIntervalSeconds: Int = -1,
         offlineMaxTraceItems: Int = 0,
         offlineMaxMetricItems: Int = 0,
-        offlineMaxLogItems: Int = 0
+        offlineMaxLogItems: Int = 0,
+        enableScreenTracking: Bool = true,
+        enableTapTracking: Bool = false,
+        enableStartupTracking: Bool = false,
+        enableAnrTracking: Bool = true,
+        enableCrashTracking: Bool = true,
+        serviceVersion: String? = nil,
+        alwaysCaptureErrors: Bool = true,
+        sessionTimeoutMinutes: Int = 30,
+        maxSessionDurationMinutes: Int = 60,
+        firstPartyHosts: [String] = [],
+        ignoreUrlPatterns: [String] = [],
+        enableHttpTracking: Bool = true,
+        enableErrorTracking: Bool = true,
+        enableJankTracking: Bool = true,
+        enableLifecycleTracking: Bool = true,
+        enableLogging: Bool = true,
+        enableMetrics: Bool = true,
+        longTaskThresholdMs: Int = 100,
+        frozenFrameThresholdMs: Int = 700,
+        maxOfflineStorageMb: Int = 5,
+        debugLogging: Bool = false
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -91,9 +149,9 @@ public enum Scout {
             environment: environment,
             headers: headers,
             sessionSampleRate: sessionSampleRate,
-            enableScreenTracking: false,
-            enableTapTracking: false,
-            enableStartupTracking: false,
+            enableScreenTracking: enableScreenTracking,
+            enableTapTracking: enableTapTracking,
+            enableStartupTracking: enableStartupTracking,
             resourceAttributes: resourceAttributes,
             enableMemoryMetrics: enableMemoryMetrics,
             enableCpuMetrics: enableCpuMetrics,
@@ -110,9 +168,27 @@ public enum Scout {
             offlineMaxLogItems: Int32(offlineMaxLogItems),
             enableAnrTracking: false,
             anrThresholdMs: Int64(anrThresholdMs),
-            enableCrashTracking: true
+            enableCrashTracking: enableCrashTracking,
+            serviceVersion: serviceVersion,
+            alwaysCaptureErrors: alwaysCaptureErrors,
+            sessionTimeoutMinutes: Int32(sessionTimeoutMinutes),
+            maxSessionDurationMinutes: Int32(maxSessionDurationMinutes),
+            firstPartyHosts: firstPartyHosts,
+            ignoreUrlPatterns: ignoreUrlPatterns,
+            enableHttpTracking: enableHttpTracking,
+            enableErrorTracking: enableErrorTracking,
+            enableJankTracking: enableJankTracking,
+            enableLifecycleTracking: enableLifecycleTracking,
+            enableLogging: enableLogging,
+            enableMetrics: enableMetrics,
+            longTaskThresholdMs: Int64(longTaskThresholdMs),
+            frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
+            maxOfflineStorageMb: Int32(maxOfflineStorageMb),
+            debugLogging: debugLogging
         )
-        AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
+        if enableAnrTracking {
+            AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
+        }
     }
 
     public static func setScreen(_ name: String) { ScoutEngine.shared.setScreen(name: name) }
