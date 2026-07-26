@@ -22,7 +22,6 @@ internal class ExitInfoInstrumentation(
             val last = prefs.getLong(KEY_LAST, 0L)
             var newest = last
             var skipNative = core.nativeCrashesCapturedThisLaunch
-            var skipJvm = core.jvmCrashesCapturedThisLaunch
             for (info in am.getHistoricalProcessExitReasons(app.packageName, 0, 20)) {
                 if (info.timestamp <= last) continue
                 if (info.timestamp > newest) newest = info.timestamp
@@ -34,10 +33,9 @@ internal class ExitInfoInstrumentation(
                             emitCrash(info, ScoutSpans.NATIVE_CRASH, "native_signal")
                         }
                     ApplicationExitInfo.REASON_CRASH ->
-                        if (skipJvm > 0) {
-                            skipJvm--
-                        } else {
+                        if (!core.crashAlreadyReported(info.timestamp, CRASH_DEDUP_WINDOW_MS)) {
                             emitCrash(info, ScoutSpans.APP_CRASH, "jvm_exception")
+                            core.markCrashReported(info.timestamp)
                         }
                     ApplicationExitInfo.REASON_ANR -> emitAnr(info)
                 }
@@ -101,5 +99,6 @@ internal class ExitInfoInstrumentation(
     companion object {
         private const val KEY_LAST = "scout.last_exit_ts"
         private const val MAX_TOMBSTONE_BYTES = 128_000
+        private const val CRASH_DEDUP_WINDOW_MS = 10_000L
     }
 }

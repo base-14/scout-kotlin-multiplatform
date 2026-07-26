@@ -515,9 +515,6 @@ class ScoutCore(
     private val crashJson = Json { ignoreUnknownKeys = true }
 
     @Volatile
-    var jvmCrashesCapturedThisLaunch: Int = 0
-
-    @Volatile
     var nativeCrashesCapturedThisLaunch: Int = 0
 
     private val initEpochMillis = epochMillis()
@@ -542,8 +539,46 @@ class ScoutCore(
 
     private val pendingCrashDir: Path? = cacheDir?.div("scout_pending_crash")
 
+    private val reportedCrashesFile: Path? = cacheDir?.div("scout_reported_crashes")
+
+    fun markCrashReported(epochMillis: Long) {
+        val f = reportedCrashesFile ?: return
+        val dir = cacheDir ?: return
+        runCatching {
+            val entries = (readReportedCrashes() + epochMillis).takeLast(REPORTED_CRASH_LIMIT)
+            val bytes = entries.joinToString("\n").encodeToByteArray()
+            val tmp = dir / "${randomUuidString()}.reported.tmp"
+            val handle = systemFileSystem().openReadWrite(tmp)
+            try {
+                handle.write(0L, bytes, 0, bytes.size)
+                handle.flush()
+            } finally {
+                handle.close()
+            }
+            systemFileSystem().atomicMove(tmp, f)
+        }
+    }
+
+    fun crashAlreadyReported(epochMillis: Long, toleranceMs: Long): Boolean =
+        readReportedCrashes().any { it - epochMillis in -toleranceMs until toleranceMs }
+
+    private fun readReportedCrashes(): List<Long> {
+        val f = reportedCrashesFile ?: return emptyList()
+        return runCatching {
+            if (!systemFileSystem().exists(f)) {
+                emptyList()
+            } else {
+                systemFileSystem().read(f) { readUtf8() }
+                    .lineSequence().mapNotNull { it.trim().toLongOrNull() }.toList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
     fun persistCrash(attributes: Map<String, Any>) {
-        val obj = buildJsonObject { for ((k, v) in attributes) put(k, v.toString()) }
+        val obj = buildJsonObject {
+            for ((k, v) in attributes) put(k, v.toString())
+            put(KEY_CRASH_EPOCH_MILLIS, epochMillis().toString())
+        }
         val payload = obj.toString()
         val dir = pendingCrashDir
         if (dir != null) {
@@ -588,7 +623,14 @@ class ScoutCore(
     private fun replayCrashPayload(raw: String) {
         val obj = runCatching { crashJson.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return
         val attrs = LinkedHashMap<String, Any>()
-        for ((k, v) in obj) attrs[k] = v.jsonPrimitive.content
+        var persistMillis: Long? = null
+        for ((k, v) in obj) {
+            if (k == KEY_CRASH_EPOCH_MILLIS) {
+                persistMillis = v.jsonPrimitive.content.toLongOrNull()
+                continue
+            }
+            attrs[k] = v.jsonPrimitive.content
+        }
         val type = attrs[ScoutAttributes.ERROR_TYPE]?.toString()
         val message = attrs[ScoutAttributes.ERROR_MESSAGE]?.toString()
         attrs[ScoutAttributes.ERROR_ID] = randomUuidString()
@@ -599,7 +641,7 @@ class ScoutCore(
         attrs[ScoutAttributes.CRASH_LAST_SCREEN]?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         val statusMessage = message?.takeIf { it.isNotBlank() } ?: type ?: "app crash"
         emitSpan(ScoutSpans.APP_CRASH, attrs, status = StatusData.Error(statusMessage))
-        jvmCrashesCapturedThisLaunch++
+        persistMillis?.let { markCrashReported(it) }
     }
 
     @Serializable
@@ -700,5 +742,7 @@ class ScoutCore(
     private companion object {
         const val KEY_PENDING_CRASH = "scout.pending_crash"
         const val KEY_ACTIVE_ROOT = "scout.active_root"
+        const val KEY_CRASH_EPOCH_MILLIS = "scout.crash_epoch_millis"
+        const val REPORTED_CRASH_LIMIT = 50
     }
 }
