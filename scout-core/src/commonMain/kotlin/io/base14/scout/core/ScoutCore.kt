@@ -551,7 +551,14 @@ class ScoutCore(
                 systemFileSystem().createDirectories(dir)
                 val name = randomUuidString()
                 val tmp = dir / "$name.tmp"
-                systemFileSystem().write(tmp) { writeUtf8(payload) }
+                val bytes = payload.encodeToByteArray()
+                val handle = systemFileSystem().openReadWrite(tmp)
+                try {
+                    handle.write(0L, bytes, 0, bytes.size)
+                    handle.flush()
+                } finally {
+                    handle.close()
+                }
                 systemFileSystem().atomicMove(tmp, dir / "$name.json")
             }.isSuccess
             if (written) return
@@ -570,7 +577,7 @@ class ScoutCore(
                 for (f in systemFileSystem().list(dir)) {
                     if (!f.name.endsWith(".json")) continue
                     runCatching { systemFileSystem().read(f) { readUtf8() } }
-                        .getOrNull()?.let { payloads.add(it) }
+                        .getOrNull()?.takeIf { it.isNotBlank() }?.let { payloads.add(it) }
                     runCatching { systemFileSystem().delete(f) }
                 }
             }
