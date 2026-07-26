@@ -84,7 +84,7 @@ internal class NativeCrashHandler(private val app: Application, private val core
         runCatching { imagesFile.delete() }
 
         core.emit(ScoutSpans.NATIVE_CRASH, attrs, errorMessage = "Native crash ($signalName)")
-        core.nativeCrashCapturedThisLaunch = true
+        core.nativeCrashesCapturedThisLaunch++
     }
 
     private fun registersToJson(regs: String): String {

@@ -40,6 +40,7 @@ internal class LifecycleInstrumentation(private val core: ScoutCore) : DefaultLi
         backgroundedUptime = SystemClock.uptimeMillis()
         emit("device.app.lifecycle.paused")
         core.sessionManager.onBackground()
+        core.forceFlush()
     }
 
     private var previousLifecycleState: String? = null

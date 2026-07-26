@@ -58,6 +58,7 @@ internal class IosInstrumentation(
             center.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, queue) { _ ->
                 core.sessionManager.onBackground()
                 emitLifecycle("background")
+                core.forceFlush()
             }
         }
     }

@@ -21,21 +21,21 @@ internal class ExitInfoInstrumentation(
             val prefs = app.getSharedPreferences("scout_rum", Context.MODE_PRIVATE)
             val last = prefs.getLong(KEY_LAST, 0L)
             var newest = last
-            var skipNative = core.nativeCrashCapturedThisLaunch
-            var skipJvm = core.jvmCrashCapturedThisLaunch
+            var skipNative = core.nativeCrashesCapturedThisLaunch
+            var skipJvm = core.jvmCrashesCapturedThisLaunch
             for (info in am.getHistoricalProcessExitReasons(app.packageName, 0, 20)) {
                 if (info.timestamp <= last) continue
                 if (info.timestamp > newest) newest = info.timestamp
                 when (info.reason) {
                     ApplicationExitInfo.REASON_CRASH_NATIVE ->
-                        if (skipNative) {
-                            skipNative = false
+                        if (skipNative > 0) {
+                            skipNative--
                         } else {
                             emitCrash(info, ScoutSpans.NATIVE_CRASH, "native_signal")
                         }
                     ApplicationExitInfo.REASON_CRASH ->
-                        if (skipJvm) {
-                            skipJvm = false
+                        if (skipJvm > 0) {
+                            skipJvm--
                         } else {
                             emitCrash(info, ScoutSpans.APP_CRASH, "jvm_exception")
                         }

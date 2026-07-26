@@ -30,14 +30,20 @@ import io.opentelemetry.kotlin.context.Context
 import io.opentelemetry.kotlin.createOpenTelemetry
 import io.opentelemetry.kotlin.logging.Logger
 import io.opentelemetry.kotlin.logging.SeverityNumber
+import io.opentelemetry.kotlin.logging.export.LogRecordProcessor
 import io.opentelemetry.kotlin.logging.export.batchLogRecordProcessor
 import io.opentelemetry.kotlin.logging.export.persistingLogRecordProcessor
 import io.opentelemetry.kotlin.tracing.Span
 import io.opentelemetry.kotlin.tracing.SpanKind
 import io.opentelemetry.kotlin.tracing.StatusData
 import io.opentelemetry.kotlin.tracing.Tracer
+import io.opentelemetry.kotlin.tracing.export.SpanProcessor
 import io.opentelemetry.kotlin.tracing.export.batchSpanProcessor
 import io.opentelemetry.kotlin.tracing.export.persistingSpanProcessor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -62,6 +68,10 @@ class ScoutCore(
 
     private val resourceAttrs: Map<String, String> = buildResourceAttrs(platformResourceAttributes)
 
+    private val flushScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var spanProcessor: SpanProcessor? = null
+    private var logProcessor: LogRecordProcessor? = null
+
     private val otel: OpenTelemetry = createOpenTelemetry {
         serviceName = config.serviceName
         resource {
@@ -72,7 +82,7 @@ class ScoutCore(
                 val exporter =
                     ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging, config.effectiveMaxRetries)
                 val dir = cacheDir
-                if (config.offlineBufferEnabled && dir != null) {
+                val processor = if (config.offlineBufferEnabled && dir != null) {
                     persistingSpanProcessor(
                         ScoutNoopSpanProcessor,
                         exporter,
@@ -89,6 +99,8 @@ class ScoutCore(
                         maxExportBatchSize = config.effectiveMaxExportBatchSize,
                     )
                 }
+                spanProcessor = processor
+                processor
             }
         }
         if (config.enableLogging) {
@@ -103,7 +115,7 @@ class ScoutCore(
                             config.effectiveMaxRetries,
                         )
                     val dir = cacheDir
-                    if (config.offlineBufferEnabled && dir != null) {
+                    val processor = if (config.offlineBufferEnabled && dir != null) {
                         persistingLogRecordProcessor(
                             ScoutNoopLogRecordProcessor,
                             logExporter,
@@ -120,6 +132,8 @@ class ScoutCore(
                             maxExportBatchSize = config.effectiveMaxExportBatchSize,
                         )
                     }
+                    logProcessor = processor
+                    processor
                 }
             }
         }
@@ -146,6 +160,14 @@ class ScoutCore(
     )
 
     private val resurrector = SpanResurrector(config.endpoint, exportHeaders(), httpClient)
+
+    fun forceFlush() {
+        flushScope.launch {
+            runCatching { spanProcessor?.forceFlush() }
+            runCatching { logProcessor?.forceFlush() }
+        }
+        runCatching { metricEmitter.flush() }
+    }
 
     fun emitGauge(name: String, value: Double, unit: String, attributes: Map<String, Any> = emptyMap()) {
         if (!config.enableMetrics || !sessionManager.sampled()) return
@@ -493,10 +515,10 @@ class ScoutCore(
     private val crashJson = Json { ignoreUnknownKeys = true }
 
     @Volatile
-    var jvmCrashCapturedThisLaunch: Boolean = false
+    var jvmCrashesCapturedThisLaunch: Int = 0
 
     @Volatile
-    var nativeCrashCapturedThisLaunch: Boolean = false
+    var nativeCrashesCapturedThisLaunch: Int = 0
 
     private val initEpochMillis = epochMillis()
 
@@ -570,7 +592,7 @@ class ScoutCore(
         attrs[ScoutAttributes.CRASH_LAST_SCREEN]?.let { attrs[ScoutAttributes.SCREEN_NAME] = it }
         val statusMessage = message?.takeIf { it.isNotBlank() } ?: type ?: "app crash"
         emitSpan(ScoutSpans.APP_CRASH, attrs, status = StatusData.Error(statusMessage))
-        jvmCrashCapturedThisLaunch = true
+        jvmCrashesCapturedThisLaunch++
     }
 
     @Serializable
