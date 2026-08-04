@@ -43,6 +43,9 @@ internal class IosInstrumentation(
         if (core.config.enableScreenTracking) {
             IosScreenTracking.install()
         }
+        if (core.config.enableCrashTracking) {
+            IosMetricKitSubscriber.start()
+        }
         IosMetricsCollector.start(
             memoryEnabled = core.config.enableMemoryMetrics,
             cpuEnabled = core.config.enableCpuMetrics,

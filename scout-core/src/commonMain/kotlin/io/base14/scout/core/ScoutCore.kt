@@ -43,6 +43,8 @@ import io.opentelemetry.kotlin.tracing.export.persistingSpanProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -69,6 +71,7 @@ class ScoutCore(
     private val resourceAttrs: Map<String, String> = buildResourceAttrs(platformResourceAttributes)
 
     private val flushScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val offlineDir: Path? = cacheDir?.div("scout_offline")
     private var spanProcessor: SpanProcessor? = null
     private var logProcessor: LogRecordProcessor? = null
 
@@ -81,7 +84,7 @@ class ScoutCore(
             export {
                 val exporter =
                     ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging, config.effectiveMaxRetries)
-                val dir = cacheDir
+                val dir = offlineDir
                 val processor = if (config.offlineBufferEnabled && dir != null) {
                     persistingSpanProcessor(
                         ScoutNoopSpanProcessor,
@@ -114,7 +117,7 @@ class ScoutCore(
                             config.debugLogging,
                             config.effectiveMaxRetries,
                         )
-                    val dir = cacheDir
+                    val dir = offlineDir
                     val processor = if (config.offlineBufferEnabled && dir != null) {
                         persistingLogRecordProcessor(
                             ScoutNoopLogRecordProcessor,
@@ -161,12 +164,33 @@ class ScoutCore(
 
     private val resurrector = SpanResurrector(config.endpoint, exportHeaders(), httpClient)
 
+    init {
+        val dir = offlineDir
+        if (config.offlineBufferEnabled && dir != null) {
+            runCatching { systemFileSystem().createDirectories(dir) }
+            flushScope.launch {
+                val intervalMs = config.effectiveExportIntervalSeconds * 1000L
+                while (isActive) {
+                    delay(intervalMs)
+                    pruneOfflineStorage()
+                }
+            }
+        }
+    }
+
     fun forceFlush() {
         flushScope.launch {
             runCatching { spanProcessor?.forceFlush() }
             runCatching { logProcessor?.forceFlush() }
         }
         runCatching { metricEmitter.flush() }
+        runCatching { pruneOfflineStorage() }
+    }
+
+    private fun pruneOfflineStorage() {
+        if (!config.offlineBufferEnabled) return
+        val dir = offlineDir ?: return
+        pruneDirToCap(systemFileSystem(), dir, config.maxOfflineStorageMb.toLong() * 1024L * 1024L)
     }
 
     fun emitGauge(name: String, value: Double, unit: String, attributes: Map<String, Any> = emptyMap()) {

@@ -40,9 +40,6 @@ data class ScoutConfig(
     val vitalsCollectionIntervalSeconds: Int = 60,
 
     val offlineBufferEnabled: Boolean = false,
-    val offlineMaxTraceItems: Int = 0,
-    val offlineMaxMetricItems: Int = 0,
-    val offlineMaxLogItems: Int = 0,
 
     val anrThresholdMs: Long = 5_000,
     val longTaskThresholdMs: Long = 100,

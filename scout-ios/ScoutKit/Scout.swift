@@ -39,9 +39,6 @@ public enum Scout {
         metricExportIntervalSeconds: Int = -1,
         vitalsCollectionIntervalSeconds: Int = 60,
         offlineBufferEnabled: Bool = false,
-        offlineMaxTraceItems: Int = 0,
-        offlineMaxMetricItems: Int = 0,
-        offlineMaxLogItems: Int = 0,
         anrThresholdMs: Double = 5000,
         longTaskThresholdMs: Int = 100,
         frozenFrameThresholdMs: Int = 700,
@@ -68,9 +65,6 @@ public enum Scout {
             vitalsCollectionIntervalSeconds: Int32(vitalsCollectionIntervalSeconds),
             offlineBufferEnabled: offlineBufferEnabled,
             metricExportIntervalSeconds: Int32(metricExportIntervalSeconds),
-            offlineMaxTraceItems: Int32(offlineMaxTraceItems),
-            offlineMaxMetricItems: Int32(offlineMaxMetricItems),
-            offlineMaxLogItems: Int32(offlineMaxLogItems),
             enableAnrTracking: false,
             anrThresholdMs: Int64(anrThresholdMs),
             enableCrashTracking: enableCrashReporting,
@@ -95,9 +89,6 @@ public enum Scout {
         if enableAnrTracking {
             AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
         }
-        if enableCrashReporting {
-            MetricKitSubscriber.shared.start()
-        }
     }
 
     public static func startBridge(
@@ -118,9 +109,6 @@ public enum Scout {
         enableCpuMetrics: Bool = false,
         enableFrameMetrics: Bool = false,
         metricExportIntervalSeconds: Int = -1,
-        offlineMaxTraceItems: Int = 0,
-        offlineMaxMetricItems: Int = 0,
-        offlineMaxLogItems: Int = 0,
         enableScreenTracking: Bool = true,
         enableTapTracking: Bool = false,
         enableStartupTracking: Bool = false,
@@ -163,9 +151,6 @@ public enum Scout {
             vitalsCollectionIntervalSeconds: Int32(vitalsCollectionIntervalSeconds),
             offlineBufferEnabled: offlineBufferEnabled,
             metricExportIntervalSeconds: Int32(metricExportIntervalSeconds),
-            offlineMaxTraceItems: Int32(offlineMaxTraceItems),
-            offlineMaxMetricItems: Int32(offlineMaxMetricItems),
-            offlineMaxLogItems: Int32(offlineMaxLogItems),
             enableAnrTracking: false,
             anrThresholdMs: Int64(anrThresholdMs),
             enableCrashTracking: enableCrashTracking,
