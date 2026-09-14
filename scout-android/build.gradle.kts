@@ -29,6 +29,12 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a", "x86")
         }
+        externalNativeBuild {
+            cmake {
+                // Play requires 16 KB ELF page alignment; NDK r27 defaults to 4 KB without this.
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
     }
 
     externalNativeBuild {
