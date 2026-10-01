@@ -11,7 +11,7 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased — scout-core · scout-android · scout-ios · scout-kmp
+## 2026-10-01 — scout-core 0.1.9 · scout-android 0.1.10 · scout-ios 0.1.11 · scout-kmp 0.1.12
 
 ### Added
 - **Cellular generation on every span: `network.connection.subtype`.** `network.connection.type` only ever distinguished transports (`wifi` / `cellular` / `ethernet`), so a 5G session and an EDGE session were both just `cellular`. The dynamic-attribute provider now also reports the radio access technology — `nr`, `nrnsa`, `lte_ca`, `lte`, `hspap`, `umts`, `edge`, … — using the OpenTelemetry `network.connection.subtype` value space, and only while the active transport is cellular.
