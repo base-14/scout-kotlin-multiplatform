@@ -118,6 +118,7 @@ object ScoutResourceAttributes {
     const val DEVICE_BATTERY_DISCHARGE_RATE = "device.battery.discharge_rate"
     const val DEVICE_ORIENTATION = "device.orientation"
     const val NETWORK_CONNECTION_TYPE = "network.connection.type"
+    const val NETWORK_CONNECTION_SUBTYPE = "network.connection.subtype"
     const val NETWORK_CONNECTIVITY_STATUS = "network.connectivity.status"
     const val NETWORK_INTERFACES = "network.interfaces"
 }

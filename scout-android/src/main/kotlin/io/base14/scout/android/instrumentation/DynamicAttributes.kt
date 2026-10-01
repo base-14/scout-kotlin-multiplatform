@@ -19,9 +19,11 @@ import io.base14.scout.core.semantics.ScoutResourceAttributes as R
 
 internal class DynamicAttributes(private val app: Application) {
     @Volatile private var connectionType: String = "unknown"
+    private val radio = RadioAccessTechnology(app)
 
     fun install(core: ScoutCore) {
         connectionType = runCatching { DeviceResources.networkType(app) }.getOrDefault("unknown")
+        radio.install()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching {
                 val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -48,6 +50,9 @@ internal class DynamicAttributes(private val app: Application) {
         core.dynamicAttributesProvider = {
             buildMap {
                 put(R.NETWORK_CONNECTION_TYPE, connectionType)
+                if (connectionType == "cellular") {
+                    radio.current().takeIf { it.isNotEmpty() }?.let { put(R.NETWORK_CONNECTION_SUBTYPE, it) }
+                }
                 put(R.NETWORK_CONNECTIVITY_STATUS, connectivityStatus())
                 networkInterfaces().takeIf { it.isNotEmpty() }?.let { put(R.NETWORK_INTERFACES, it) }
                 put(R.DEVICE_ORIENTATION, orientation())

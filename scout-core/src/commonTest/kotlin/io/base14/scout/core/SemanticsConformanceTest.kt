@@ -75,5 +75,6 @@ class SemanticsConformanceTest {
         assertEquals("host.arch", ScoutResourceAttributes.HOST_ARCH)
         assertEquals("device.model.name", ScoutResourceAttributes.DEVICE_MODEL_NAME)
         assertEquals("network.connection.type", ScoutResourceAttributes.NETWORK_CONNECTION_TYPE)
+        assertEquals("network.connection.subtype", ScoutResourceAttributes.NETWORK_CONNECTION_SUBTYPE)
     }
 }

@@ -10,6 +10,7 @@ import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.sizeOf
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFRelease
+import platform.CoreTelephony.CTTelephonyNetworkInfo
 import platform.SystemConfiguration.SCNetworkReachabilityCreateWithAddress
 import platform.SystemConfiguration.SCNetworkReachabilityGetFlags
 import platform.SystemConfiguration.kSCNetworkReachabilityFlagsIsWWAN
@@ -36,7 +37,12 @@ internal object IosDynamicAttributes {
     }
 
     fun collect(): Map<String, Any> = buildMap {
-        put(R.NETWORK_CONNECTION_TYPE, connectionType())
+        val transport = connectionType()
+        put(R.NETWORK_CONNECTION_TYPE, transport)
+        if (transport == "cellular") {
+            radioAccessTechnology().takeIf { it.isNotEmpty() }
+                ?.let { put(R.NETWORK_CONNECTION_SUBTYPE, it) }
+        }
         put(R.NETWORK_CONNECTIVITY_STATUS, connectivityStatus())
         put(R.DEVICE_ORIENTATION, orientation())
         batteryLevel()?.let { put(R.DEVICE_BATTERY_LEVEL, it.toString()) }
@@ -93,6 +99,33 @@ internal object IosDynamicAttributes {
             else -> "wifi"
         }
     }
+
+    private val telephonyNetworkInfo by lazy { CTTelephonyNetworkInfo() }
+
+    private fun radioAccessTechnology(): String =
+        runCatching {
+            val current = telephonyNetworkInfo.serviceCurrentRadioAccessTechnology
+            val raw = current?.values?.firstNotNullOfOrNull { it as? String } ?: ""
+            subtypeOf(raw)
+        }.getOrDefault("")
+
+    internal fun subtypeOf(raw: String): String =
+        when (raw.removePrefix("CTRadioAccessTechnology")) {
+            "NRNSA" -> "nrnsa"
+            "NR" -> "nr"
+            "LTE" -> "lte"
+            "WCDMA" -> "umts"
+            "HSDPA" -> "hsdpa"
+            "HSUPA" -> "hsupa"
+            "CDMA1x" -> "cdma"
+            "CDMAEVDORev0" -> "evdo_0"
+            "CDMAEVDORevA" -> "evdo_a"
+            "CDMAEVDORevB" -> "evdo_b"
+            "eHRPD" -> "ehrpd"
+            "GPRS" -> "gprs"
+            "Edge" -> "edge"
+            else -> ""
+        }
 
     @OptIn(ExperimentalForeignApi::class)
     private fun connectivityStatus(): String {
