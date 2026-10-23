@@ -11,6 +11,12 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-23 — scout-core 0.1.10 · scout-android 0.1.11 · scout-kmp 0.1.13
+
+### Security
+- **OkHttp 4.12.1 on Android (bad-roots mitigation).** `ktor-client-okhttp` 3.2.3 pulls in `okhttp` and `okhttp-sse` 4.12.0, which predate OkHttp's mitigation for bad certificate roots. `scout-core` and `scout-android` now import `okhttp-bom` 4.12.1 as a platform, so consumers resolve the patched version for both artifacts without any change on their side. Apps that already depend on a newer OkHttp (for example 5.x) keep their version.
+  - scout-ios is unaffected and not re-released: the iOS engine uses Ktor's Darwin client, and OkHttp is never part of the xcframework or the iOS klibs. scout-kmp 0.1.13 keeps pinning scout-ios 0.1.11.
+
 ## 2026-10-01 — scout-core 0.1.9 · scout-android 0.1.10 · scout-ios 0.1.11 · scout-kmp 0.1.12
 
 ### Added
