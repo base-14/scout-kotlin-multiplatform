@@ -56,6 +56,7 @@ kotlin {
             implementation(libs.okio.fakefilesystem)
         }
         androidMain.dependencies {
+            implementation(project.dependencies.platform(libs.okhttp.bom))
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.annotation)
         }

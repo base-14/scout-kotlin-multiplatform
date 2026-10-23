@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.androidx.jankstats)
     implementation(libs.kotlinx.coroutines)
     implementation(libs.ktor.client.core)
+    implementation(platform(libs.okhttp.bom))
     implementation(libs.ktor.client.okhttp)
 
     // Optional instrumentation surfaces — host provides them if used.
@@ -93,8 +94,8 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
-    androidTestImplementation("com.squareup.okhttp3:okhttp:4.12.0")
-    androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    androidTestImplementation(libs.okhttp)
+    androidTestImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.ktor.client.core)
     androidTestImplementation(libs.ktor.client.okhttp)
     androidTestImplementation(libs.kotlinx.coroutines)
