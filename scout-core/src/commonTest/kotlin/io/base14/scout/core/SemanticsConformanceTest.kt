@@ -40,6 +40,7 @@ class SemanticsConformanceTest {
         assertEquals("session.type", ScoutAttributes.SESSION_TYPE)
         assertEquals("session.sample_rate", ScoutAttributes.SESSION_SAMPLE_RATE)
         assertEquals("session.sampled", ScoutAttributes.SESSION_SAMPLED)
+        assertEquals("session.sampling_source", ScoutAttributes.SESSION_SAMPLING_SOURCE)
         assertEquals("session.start_time", ScoutAttributes.SESSION_START_TIME)
         assertEquals("session.previous_id", ScoutAttributes.SESSION_PREVIOUS_ID)
         assertEquals("user.id", ScoutAttributes.USER_ID)

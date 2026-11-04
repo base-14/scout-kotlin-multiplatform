@@ -52,6 +52,14 @@ data class ScoutConfig(
     val beforeSend: ((name: String, attributes: MutableMap<String, Any>) -> Boolean)? = null,
 
     val debugLogging: Boolean = false,
+
+    /**
+     * Per-user sampling decided by the app, e.g. from its own remote config.
+     * `true` keeps the user's sessions, `false` drops their spans (logs and
+     * metrics still flow), and `null` falls back to [sessionSampleRate].
+     * Applies from the next session start. See `Scout.setUserSampling`.
+     */
+    val userSampling: Boolean? = null,
 ) {
     val effectiveExportIntervalSeconds: Int get() = exportIntervalSeconds.coerceAtLeast(1)
     val effectiveMaxExportBatchSize: Int get() = maxExportBatchSize.coerceAtLeast(1)

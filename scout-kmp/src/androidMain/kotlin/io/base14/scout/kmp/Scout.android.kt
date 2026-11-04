@@ -24,6 +24,9 @@ actual object Scout {
     actual fun clearUser() {
         AndroidScout.clearUser()
     }
+    actual fun setUserSampling(value: Boolean?) {
+        AndroidScout.setUserSampling(value)
+    }
 
     actual fun setSessionAttributes(attributes: Map<String, String>) {
         AndroidScout.setSessionAttributes(attributes)

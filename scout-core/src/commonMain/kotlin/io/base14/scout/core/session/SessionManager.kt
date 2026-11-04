@@ -17,14 +17,17 @@ data class PersistedSession(
     val sampled: Boolean,
     val startIso: String,
     val previousId: String? = null,
+    val samplingSource: SamplingSource = SamplingSource.FALLBACK,
 )
 
 class SessionManager(
     private val config: ScoutConfig,
     private val store: KeyValueStore,
+    private val clock: () -> Long = ::epochMillis,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = ScoutLock()
+    val userSampling = UserSampling(store, config.userSampling)
     private var session: PersistedSession = restoreOrCreate()
     private var backgroundedAt: Long? = null
 
@@ -35,7 +38,7 @@ class SessionManager(
         if (raw != null) {
             val prev = runCatching { json.decodeFromString<PersistedSession>(raw) }.getOrNull()
             if (prev != null && isResumable(prev)) {
-                return prev.copy(lastActive = epochMillis()).also { persist(it) }
+                return prev.copy(lastActive = clock()).also { persist(it) }
             }
             return create(previousId = prev?.id)
         }
@@ -43,7 +46,7 @@ class SessionManager(
     }
 
     private fun isResumable(s: PersistedSession): Boolean {
-        val now = epochMillis()
+        val now = clock()
         val withinIdle = now - s.lastActive < config.sessionTimeoutMinutes * 60_000L
         val withinMax = config.maxSessionDurationMinutes == 0 ||
             now - s.startedAt < config.maxSessionDurationMinutes * 60_000L
@@ -51,10 +54,11 @@ class SessionManager(
     }
 
     private fun create(previousId: String?): PersistedSession {
-        val now = epochMillis()
+        val now = clock()
         val id = randomUuidString()
-        val sampled = Sampler.decide(id, config.sessionSampleRate)
-        return PersistedSession(id, now, now, sampled, isoUtc(now), previousId)
+        val (sampled, source) = userSampling.resolve(id, config.sessionSampleRate)
+        if (config.debugLogging) println("SCOUTDBG session id=$id sampled=$sampled source=${source.wire}")
+        return PersistedSession(id, now, now, sampled, isoUtc(now), previousId, source)
             .also { persist(it) }
     }
 
@@ -66,7 +70,7 @@ class SessionManager(
         var changed = false
         val result = lock.withLock {
             if (config.maxSessionDurationMinutes > 0 &&
-                epochMillis() - session.startedAt >= config.maxSessionDurationMinutes * 60_000L
+                clock() - session.startedAt >= config.maxSessionDurationMinutes * 60_000L
             ) {
                 session = create(previousId = session.id)
                 changed = true
@@ -81,15 +85,30 @@ class SessionManager(
     fun startTimeIso(): String = current().startIso
     fun sampled(): Boolean = current().sampled
     fun previousId(): String? = current().previousId
+    fun samplingSource(): SamplingSource = current().samplingSource
+
+    /**
+     * Logs and metrics are dropped only for sessions sampled out by the
+     * fallback roll. A user-"no" session still sends them; only its spans
+     * are dropped.
+     */
+    fun allowsLogsAndMetrics(): Boolean =
+        current().let { it.sampled || it.samplingSource == SamplingSource.USER }
+
+    /** Ends the current session and starts a new one, which resolves its sampling decision again. */
+    fun rotate() {
+        lock.withLock { session = create(previousId = session.id) }
+        onSessionChanged?.invoke()
+    }
 
     fun touch(): Unit = lock.withLock {
-        session = session.copy(lastActive = epochMillis())
+        session = session.copy(lastActive = clock())
         persist(session)
     }
 
     fun onBackground(): Unit = lock.withLock {
-        backgroundedAt = epochMillis()
-        session = session.copy(lastActive = epochMillis())
+        backgroundedAt = clock()
+        session = session.copy(lastActive = clock())
         persist(session)
     }
 
@@ -97,21 +116,26 @@ class SessionManager(
         var changed = false
         lock.withLock {
             val bg = backgroundedAt
-            if (bg != null && epochMillis() - bg >= config.sessionTimeoutMinutes * 60_000L) {
+            if (bg != null && clock() - bg >= config.sessionTimeoutMinutes * 60_000L) {
                 session = create(previousId = session.id)
                 changed = true
             }
             backgroundedAt = null
-            session = session.copy(lastActive = epochMillis())
+            session = session.copy(lastActive = clock())
             persist(session)
         }
         if (changed) onSessionChanged?.invoke()
     }
 
-    fun adoptExternal(id: String, sampled: Boolean, startIso: String) {
+    fun adoptExternal(
+        id: String,
+        sampled: Boolean,
+        startIso: String,
+        source: SamplingSource = SamplingSource.FALLBACK,
+    ) {
         lock.withLock {
-            val now = epochMillis()
-            session = PersistedSession(id, now, now, sampled, startIso, session.id)
+            val now = clock()
+            session = PersistedSession(id, now, now, sampled, startIso, session.id, source)
             persist(session)
         }
         onSessionChanged?.invoke()

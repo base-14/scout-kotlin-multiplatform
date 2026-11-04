@@ -14,6 +14,7 @@ data class SessionContext(
     @SerialName("user.id") val userId: String? = null,
     @SerialName("user.attributes") val userAttributes: Map<String, String> = emptyMap(),
     @SerialName("session.attributes") val sessionAttributes: Map<String, String> = emptyMap(),
+    @SerialName("session.sampling_source") val samplingSource: String? = null,
 ) {
     fun toAttributes(): Map<String, Any> {
         val out = LinkedHashMap<String, Any>()
@@ -22,6 +23,7 @@ data class SessionContext(
         out[ScoutAttributes.SESSION_START_TIME] = sessionStartTime
         out[ScoutAttributes.SESSION_SAMPLE_RATE] = sampleRate
         if (!sampled) out[ScoutAttributes.SESSION_SAMPLED] = "false"
+        samplingSource?.let { out[ScoutAttributes.SESSION_SAMPLING_SOURCE] = it }
         out[ScoutAttributes.USER_ANONYMOUS_ID] = anonymousId
         userId?.takeIf { it.isNotBlank() }?.let { out[ScoutAttributes.USER_ID] = it }
         for ((k, v) in userAttributes) out[k] = v

@@ -11,6 +11,11 @@ import io.base14.scout.core.bridge.RoleResolver
 object ScoutBridge {
     val registry = InMemoryOwnerRegistry()
 
+    /** True when this process adopted another process's session (non-main process). */
+    @Volatile
+    internal var adoptedCrossProcess: Boolean = false
+        private set
+
     @Volatile
     private var ownerChangedListener: ((String) -> Unit)? = null
 
@@ -30,7 +35,13 @@ object ScoutBridge {
                 io.base14.scout.android.internal.CrossProcessOwner.queryContext(appContext)
                     ?.let { BridgeCodec.decodeContext(it) }
             if (crossCtx != null) {
-                core.adoptExternalSessionId(crossCtx.sessionId, crossCtx.sessionStartTime, crossCtx.sampled)
+                core.adoptExternalSessionId(
+                    crossCtx.sessionId,
+                    crossCtx.sessionStartTime,
+                    crossCtx.sampled,
+                    crossCtx.samplingSource,
+                )
+                adoptedCrossProcess = true
                 return Resolution.Attached(crossCtx)
             }
         }
@@ -70,12 +81,29 @@ object ScoutBridge {
         runCatching { core()?.replaceBreadcrumbs(BridgeCodec.decodeBreadcrumbsArray(payloadJson)) }
     }
 
+    @JvmOverloads
     fun adoptExternalSessionId(
         id: String,
         startIso: String,
         sampled: Boolean,
+        samplingSource: String? = null,
     ) {
-        runCatching { core()?.adoptExternalSessionId(id, startIso, sampled) }
+        runCatching { core()?.adoptExternalSessionId(id, startIso, sampled, samplingSource) }
+    }
+
+    /**
+     * Entry point for attached layers (e.g. scout-flutter) to forward the app's
+     * per-user sampling value to the session owner. It applies from the next
+     * session start. In a non-main process that adopted the main process's
+     * session it is a no-op, because that process follows the owner's decision.
+     */
+    fun setUserSampling(value: Boolean?) {
+        val core = core() ?: return
+        if (adoptedCrossProcess) {
+            if (core.config.debugLogging) println("SCOUTDBG setUserSampling ignored in non-main process")
+            return
+        }
+        runCatching { core.setUserSampling(value) }
     }
 
     private fun core(): ScoutCore? = Scout.coreInternal()

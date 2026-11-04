@@ -43,7 +43,8 @@ public enum Scout {
         longTaskThresholdMs: Int = 100,
         frozenFrameThresholdMs: Int = 700,
         maxOfflineStorageMb: Int = 5,
-        debugLogging: Bool = false
+        debugLogging: Bool = false,
+        userSampling: Bool? = nil
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -83,7 +84,8 @@ public enum Scout {
             longTaskThresholdMs: Int64(longTaskThresholdMs),
             frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
             maxOfflineStorageMb: Int32(maxOfflineStorageMb),
-            debugLogging: debugLogging
+            debugLogging: debugLogging,
+            userSampling: userSampling.map { KotlinBoolean(value: $0) }
         )
 
         if enableAnrTracking {
@@ -129,7 +131,8 @@ public enum Scout {
         longTaskThresholdMs: Int = 100,
         frozenFrameThresholdMs: Int = 700,
         maxOfflineStorageMb: Int = 5,
-        debugLogging: Bool = false
+        debugLogging: Bool = false,
+        userSampling: Bool? = nil
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -169,7 +172,8 @@ public enum Scout {
             longTaskThresholdMs: Int64(longTaskThresholdMs),
             frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
             maxOfflineStorageMb: Int32(maxOfflineStorageMb),
-            debugLogging: debugLogging
+            debugLogging: debugLogging,
+            userSampling: userSampling.map { KotlinBoolean(value: $0) }
         )
         if enableAnrTracking {
             AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
@@ -215,6 +219,13 @@ public enum Scout {
         ScoutEngine.shared.setUserAttributes(attributes: attributes)
     }
     public static func clearUser() { ScoutEngine.shared.clearUser() }
+    /// Per-user sampling decided by your app, e.g. from your remote config.
+    /// `true` keeps this user's sessions, `false` drops their spans (logs and
+    /// metrics still flow), `nil` falls back to `sessionSampleRate`. Applies
+    /// from the next session start and is persisted across launches.
+    public static func setUserSampling(_ value: Bool?) {
+        ScoutEngine.shared.setUserSampling(value: value.map { KotlinBoolean(value: $0) })
+    }
 
     // MARK: Session / account / feature flags
     public static func setSessionAttributes(_ attributes: [String: String]) {

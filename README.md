@@ -47,7 +47,39 @@ auto-instrumentation**. For HTTP, add the interceptor to your OkHttp client:
 OkHttpClient.Builder().addInterceptor(ScoutOkHttpInterceptor()).build()
 ```
 
-Optional API: `Scout.setUser`, `clearUser`, `logEvent`, `addBreadcrumb`, `reportError`.
+Optional API: `Scout.setUser`, `clearUser`, `setUserSampling`, `logEvent`, `addBreadcrumb`, `reportError`.
+
+## Sampling
+
+By default each session is sampled independently at `sessionSampleRate` (a percentage, default
+`1.0`). Error-class spans bypass sampling while `alwaysCaptureErrors` is on.
+
+**User-based sampling.** To decide per user, for example from your own remote config or feature
+flags, pass the value your app already has:
+
+```kotlin
+// At startup: the last-fetched remote-config value, read synchronously from its cache.
+ScoutConfig(serviceName = "my-app", endpoint = "…", userSampling = remoteConfig.cachedBoolean("scout_user_sampling"))
+
+// When the value arrives or changes (fetch completes, user logs in):
+Scout.setUserSampling(true)   // keep this user's sessions
+Scout.setUserSampling(false)  // drop this user's spans; logs + metrics still flow
+Scout.setUserSampling(null)   // no opinion: fall back to sessionSampleRate
+```
+
+```swift
+Scout.start(serviceName: "my-app", endpoint: "…", userSampling: cachedValue)
+Scout.setUserSampling(false)
+```
+
+- The decision is made **once per session**. A new value applies at the next session start (idle
+  timeout, max duration, next launch, or user switch), never mid-session.
+- The latest value is persisted. A non-null init value wins over the stored one, and `clearUser()`
+  resets it.
+- On an account switch, call `setUserSampling(newValue)` **before** `setUser(newId)`. The user change
+  then starts a new session with the new user's value. Going from anonymous to the first login keeps
+  the current session.
+- Every span and log carries `session.sampling_source` = `user` | `fallback`.
 
 ## Modules
 
@@ -77,7 +109,7 @@ Optional API: `Scout.setUser`, `clearUser`, `logEvent`, `addBreadcrumb`, `report
 | Logs | `logDebug/Info/Warning/Error` → OTLP logs `/v1/logs` with trace context | ✅ |
 | Facade | `setUser`/`setAccount`/`setFeatureFlag`/`setSessionAttributes`/`addTiming`/`startVital`+`endVital`/`recordOperationStep`/`logEvent`/`addBreadcrumb`/`reportError` | ✅ |
 | Session | UUID, persistence, idle/max rotation, `session.previous_id` | ✅ |
-| Sampling | deterministic FNV-1a, error-class bypass | ✅ |
+| Sampling | deterministic FNV-1a, error-class bypass, per-user `userSampling` (see [Sampling](#sampling)) | ✅ |
 | Transport | OTLP/JSON over Ktor; batch + **crash-durable offline buffering** (persistingSpanProcessor) | ✅ |
 | Resource attrs | os/device/app/arch/locale/tz/network per semantics.md §2; `service.version` auto-detected | ✅ |
 | Hooks | `beforeSend` (PII/drop), feature toggles per signal | ✅ |

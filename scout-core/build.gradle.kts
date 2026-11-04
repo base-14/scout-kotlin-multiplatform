@@ -55,6 +55,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.okio.fakefilesystem)
         }
+        jvmTest.dependencies {
+            // Real HTTP client for the remote-config simulation test (JDK HttpServer on the other end).
+            implementation(libs.ktor.client.cio)
+        }
         androidMain.dependencies {
             implementation(project.dependencies.platform(libs.okhttp.bom))
             implementation(libs.ktor.client.okhttp)
