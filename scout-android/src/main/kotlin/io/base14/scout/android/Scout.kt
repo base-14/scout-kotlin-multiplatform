@@ -107,6 +107,18 @@ object Scout {
         core?.clearUser()
     }
 
+    /**
+     * Per-user sampling decided by your app, e.g. from your remote config.
+     * `true` keeps this user's sessions, `false` drops their spans (logs and
+     * metrics still flow), and `null` falls back to `sessionSampleRate`. It
+     * applies from the next session start, never to the current one, and is
+     * persisted across launches.
+     */
+    @JvmStatic
+    fun setUserSampling(value: Boolean?) {
+        ScoutBridge.setUserSampling(value)
+    }
+
     @JvmStatic
     @JvmOverloads
     fun log(

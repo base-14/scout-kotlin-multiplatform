@@ -5,6 +5,7 @@ object ScoutAttributes {
     const val SESSION_TYPE = "session.type"
     const val SESSION_SAMPLE_RATE = "session.sample_rate"
     const val SESSION_SAMPLED = "session.sampled"
+    const val SESSION_SAMPLING_SOURCE = "session.sampling_source"
     const val SESSION_START_TIME = "session.start_time"
     const val SESSION_PREVIOUS_ID = "session.previous_id"
 

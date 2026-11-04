@@ -19,6 +19,9 @@ actual object Scout {
     actual fun clearUser() {
         ScoutEngine.clearUser()
     }
+    actual fun setUserSampling(value: Boolean?) {
+        ScoutEngine.setUserSampling(value)
+    }
 
     actual fun setSessionAttributes(attributes: Map<String, String>) {
         ScoutEngine.setSessionAttributes(attributes)

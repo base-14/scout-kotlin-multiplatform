@@ -79,6 +79,7 @@ object ScoutEngine {
         frozenFrameThresholdMs: Long = 700,
         maxOfflineStorageMb: Int = 5,
         debugLogging: Boolean = false,
+        userSampling: Boolean? = null,
     ) {
         initialize(
             ScoutConfig(
@@ -120,6 +121,7 @@ object ScoutEngine {
                 frozenFrameThresholdMs = frozenFrameThresholdMs,
                 maxOfflineStorageMb = maxOfflineStorageMb,
                 debugLogging = debugLogging,
+                userSampling = userSampling,
             ),
         )
     }
@@ -429,6 +431,13 @@ object ScoutEngine {
 
     fun clearUser() = core?.clearUser() ?: Unit
 
+    /**
+     * Per-user sampling decided by the app (e.g. its remote config); applies
+     * from the next session start. iOS has no owner registry: the engine always
+     * owns the session, so attached layers (scout-flutter) call this directly.
+     */
+    fun setUserSampling(value: Boolean?) = core?.setUserSampling(value) ?: Unit
+
     fun setSessionAttributes(attributes: Map<String, String>) =
         core?.setSessionAttributes(attributes) ?: Unit
 
@@ -474,6 +483,9 @@ object ScoutEngine {
 
     fun adoptExternalSessionId(id: String, startIso: String, sampled: Boolean) =
         core?.adoptExternalSessionId(id, startIso, sampled) ?: Unit
+
+    fun adoptExternalSessionId(id: String, startIso: String, sampled: Boolean, samplingSource: String?) =
+        core?.adoptExternalSessionId(id, startIso, sampled, samplingSource) ?: Unit
 
     fun bridgeContext(): String = core?.let { BridgeCodec.encodeContext(it.bridgeContext()) } ?: ""
 }

@@ -21,6 +21,7 @@ expect object Scout {
     fun setUser(id: String?, attributes: Map<String, String>)
     fun setUserAttributes(attributes: Map<String, String>)
     fun clearUser()
+    fun setUserSampling(value: Boolean?)
 
     // Session / account / feature flags
     fun setSessionAttributes(attributes: Map<String, String>)

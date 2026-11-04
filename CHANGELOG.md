@@ -11,6 +11,20 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased — scout-core 0.1.11 · scout-android 0.1.12 · scout-ios 0.1.12 · scout-kmp 0.1.14
+
+### Added
+- **User-based sampling: `userSampling` / `setUserSampling`.** Previously every session was sampled independently, so one user ended up with some sessions kept and others dropped. Your app can now decide per user, typically from its own remote config: `true` keeps all of that user's sessions, `false` drops their spans, and `null` (the default) keeps today's per-session roll at `sessionSampleRate`. Pass the last-known value at init with `ScoutConfig(userSampling = …)` (Swift: `Scout.start(…, userSampling:)`), and later updates with `Scout.setUserSampling(…)`.
+  - **Decided once per session.** A value takes effect at the next session start (idle timeout, max duration, next launch, or user switch) and never changes the session in flight. A resumed session keeps its decision.
+  - **A "no" user still sends logs and metrics.** Only spans are dropped. Error-class spans (`error`, `app_crash`, `native_crash`, `anr`, `ui_hang`) still pass while `alwaysCaptureErrors` is on.
+  - **Persisted.** The latest value is stored (`scout.user_sampling`), so a launch that passes nothing at init still honours it. A non-null init value wins over the stored one. `clearUser()` resets it.
+  - **User switches start a new session.** `clearUser()`, and `setUser()` with an id different from the previous one, rotate the session, but only while user sampling is in play. Apps that never use the feature see no extra sessions.
+  - **`session.sampling_source` = `user` | `fallback`** is stamped on spans and logs, so you can verify in Scout that your values are honoured.
+  - **Hybrid apps.** The owner's `bridgeContext()` carries `session.sampling_source`. Attached layers forward their value with `ScoutBridge.setUserSampling` on Android or `ScoutEngine.setUserSampling` on iOS. On Android it is a no-op in a non-main process, which follows the main process's decision.
+
+### Changed
+- **Gauges from sessions sampled out by a user "no" are now exported.** Gauges from sessions sampled out by the `sessionSampleRate` roll are still dropped, as before.
+
 ## 2026-10-23 — scout-core 0.1.10 · scout-android 0.1.11 · scout-kmp 0.1.13
 
 ### Security

@@ -62,9 +62,10 @@ class ScoutCore(
     private val httpClient: HttpClient,
     platformResourceAttributes: Map<String, String> = emptyMap(),
     cacheDirPath: String? = null,
+    clock: () -> Long = ::epochMillis,
 ) {
     private val cacheDir: Path? = cacheDirPath?.toPath()
-    val sessionManager = SessionManager(config, store)
+    val sessionManager = SessionManager(config, store, clock)
     val identity = Identity(store)
     val breadcrumbs = BreadcrumbBuffer(store = store)
 
@@ -194,7 +195,7 @@ class ScoutCore(
     }
 
     fun emitGauge(name: String, value: Double, unit: String, attributes: Map<String, Any> = emptyMap()) {
-        if (!config.enableMetrics || !sessionManager.sampled()) return
+        if (!config.enableMetrics || !sessionManager.allowsLogsAndMetrics()) return
         val attrs = LinkedHashMap(attributes)
         attrs[ScoutAttributes.SESSION_ID] = sessionManager.sessionId()
         metricEmitter.emit(listOf(MetricPoint(name, value, unit, attrs, epochNanos())))
@@ -241,6 +242,7 @@ class ScoutCore(
         all[ScoutAttributes.SESSION_START_TIME] = sessionManager.startTimeIso()
         sessionManager.previousId()?.let { all[ScoutAttributes.SESSION_PREVIOUS_ID] = it }
         if (!sampled) all[ScoutAttributes.SESSION_SAMPLED] = "false"
+        all[ScoutAttributes.SESSION_SAMPLING_SOURCE] = sessionManager.samplingSource().wire
         all[ScoutAttributes.USER_ANONYMOUS_ID] = identity.anonymousId
         identity.userId?.let { all[ScoutAttributes.USER_ID] = it }
         for ((k, v) in identity.userAttributes) all[k] = v
@@ -382,6 +384,7 @@ class ScoutCore(
             sessionStartTime = sessionManager.startTimeIso(),
             sampleRate = config.sessionSampleRate.toString(),
             sampled = sessionManager.sampled(),
+            samplingSource = sessionManager.samplingSource().wire,
             anonymousId = identity.anonymousId,
             userId = identity.userId,
             userAttributes = LinkedHashMap(identity.userAttributes),
@@ -389,8 +392,18 @@ class ScoutCore(
         )
     }
 
-    fun adoptExternalSessionId(id: String, startIso: String, sampled: Boolean) =
-        sessionManager.adoptExternal(id, sampled, startIso)
+    fun adoptExternalSessionId(
+        id: String,
+        startIso: String,
+        sampled: Boolean,
+        samplingSource: String? = null,
+    ) = sessionManager.adoptExternal(
+        id,
+        sampled,
+        startIso,
+        io.base14.scout.core.session.SamplingSource.fromWire(samplingSource)
+            ?: io.base14.scout.core.session.SamplingSource.FALLBACK,
+    )
 
     private val forwardedTracers = LinkedHashMap<String, Tracer>()
     private fun tracerFor(scope: String): Tracer = attrLock.withLock {
@@ -449,6 +462,7 @@ class ScoutCore(
                     attributes = {
                         setStringAttribute(ScoutAttributes.SESSION_ID, sessionManager.sessionId())
                         setStringAttribute(ScoutAttributes.SESSION_TYPE, "user")
+                        for ((k, v) in logSamplingAttrs()) setStringAttribute(k, v)
                         setStringAttribute(ScoutAttributes.USER_ANONYMOUS_ID, identity.anonymousId)
                         identity.userId?.let { setStringAttribute(ScoutAttributes.USER_ID, it) }
                         for ((k, v) in l.attributes) putAny(k, v)
@@ -549,6 +563,7 @@ class ScoutCore(
         ScoutAttributes.SESSION_ID to sessionManager.sessionId(),
         ScoutAttributes.SESSION_START_TIME to sessionManager.startTimeIso(),
         ScoutAttributes.SESSION_SAMPLE_RATE to config.sessionSampleRate.toString(),
+        ScoutAttributes.SESSION_SAMPLING_SOURCE to sessionManager.samplingSource().wire,
     )
 
     fun lastPersistedSessionAttrs(): Map<String, Any>? = runCatching {
@@ -728,6 +743,7 @@ class ScoutCore(
             attributes = {
                 setStringAttribute(ScoutAttributes.SESSION_ID, sessionManager.sessionId())
                 setStringAttribute(ScoutAttributes.SESSION_TYPE, "user")
+                for ((k, v) in logSamplingAttrs()) setStringAttribute(k, v)
                 setStringAttribute(ScoutAttributes.USER_ANONYMOUS_ID, identity.anonymousId)
                 identity.userId?.let { setStringAttribute(ScoutAttributes.USER_ID, it) }
                 for ((k, v) in attributes) putAny(k, v)
@@ -755,8 +771,45 @@ class ScoutCore(
 
     fun logEvent(name: String, attributes: Map<String, Any> = emptyMap()) = emitSpan(name, attributes)
 
-    fun setUser(id: String?, attributes: Map<String, String> = emptyMap()) = identity.setUser(id, attributes)
-    fun clearUser() = identity.clearUser()
+    fun setUser(id: String?, attributes: Map<String, String> = emptyMap()) {
+        val previous = identity.userId
+        identity.setUser(id, attributes)
+        rotateIfUserChanged(previous, identity.userId)
+    }
+
+    fun clearUser() {
+        val previous = identity.userId
+        identity.clearUser()
+        sessionManager.userSampling.set(null)
+        rotateIfUserChanged(previous, null)
+    }
+
+    /**
+     * Per-user sampling from the app (e.g. its remote config). Applies from the
+     * next session start, never to the current session. `null` clears it and
+     * falls back to `sessionSampleRate`.
+     */
+    fun setUserSampling(value: Boolean?) {
+        sessionManager.userSampling.set(value)
+        if (config.debugLogging) println("SCOUTDBG userSampling=$value (applies at next session start)")
+    }
+
+    private fun rotateIfUserChanged(previous: String?, next: String?) {
+        val rotate = io.base14.scout.core.session.shouldRotateOnIdentityChange(
+            previousUserId = previous,
+            newUserId = next,
+            currentSource = sessionManager.samplingSource(),
+            pending = sessionManager.userSampling.pending,
+        )
+        if (rotate) sessionManager.rotate()
+    }
+
+    private fun logSamplingAttrs(): Map<String, String> {
+        val out = LinkedHashMap<String, String>(2)
+        if (!sessionManager.sampled()) out[ScoutAttributes.SESSION_SAMPLED] = "false"
+        out[ScoutAttributes.SESSION_SAMPLING_SOURCE] = sessionManager.samplingSource().wire
+        return out
+    }
     fun addBreadcrumb(type: String, message: String) = breadcrumbs.add(type, message)
 
     val sessionId: String get() = sessionManager.sessionId()
