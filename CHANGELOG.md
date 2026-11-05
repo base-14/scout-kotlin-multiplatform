@@ -11,7 +11,7 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased — scout-core 0.1.11 · scout-android 0.1.12 · scout-ios 0.1.12 · scout-kmp 0.1.14
+## 2026-11-05 — scout-core 0.1.11 · scout-android 0.1.12 · scout-ios 0.1.12 · scout-kmp 0.1.14
 
 ### Added
 - **User-based sampling: `userSampling` / `setUserSampling`.** Previously every session was sampled independently, so one user ended up with some sessions kept and others dropped. Your app can now decide per user, typically from its own remote config: `true` keeps all of that user's sessions, `false` drops their spans, and `null` (the default) keeps today's per-session roll at `sessionSampleRate`. Pass the last-known value at init with `ScoutConfig(userSampling = …)` (Swift: `Scout.start(…, userSampling:)`), and later updates with `Scout.setUserSampling(…)`.
