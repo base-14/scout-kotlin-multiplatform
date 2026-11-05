@@ -176,6 +176,34 @@ class RemoteConfigSimulationTest {
     }
 
     @Test
+    fun forwardedLogsCarryTheOwnersSessionNotTheForwardersShadow() {
+        // A delegated layer (Flutter) stamps its own shadow session on logs it forwards. The
+        // owner's session must win, or a "no" user's logs (their only signal) are orphaned.
+        val scout = launch(InMemoryKeyValueStore(), false)
+        val payload = io.base14.scout.core.bridge.BridgeCodec.encodeLogs(
+            listOf(
+                io.base14.scout.core.bridge.ForwardedLog(
+                    scope = "flutter",
+                    body = "forwarded",
+                    attributes = mapOf(
+                        "marker" to "fwd",
+                        ScoutAttributes.SESSION_ID to "dart-shadow",
+                        ScoutAttributes.SESSION_SAMPLING_SOURCE to "fallback",
+                        ScoutAttributes.SESSION_SAMPLED to "true",
+                    ),
+                ),
+            ),
+        )
+        scout.ingestForwardedLogs(payload)
+        scout.forceFlush()
+        server.awaitLog("fwd")
+        val log = server.log("fwd")
+        assertEquals(scout.sessionId, log[ScoutAttributes.SESSION_ID])
+        assertEquals("user", log[ScoutAttributes.SESSION_SAMPLING_SOURCE])
+        assertEquals("false", log[ScoutAttributes.SESSION_SAMPLED])
+    }
+
+    @Test
     fun appThatNeverUsesTheFeatureSeesNoExtraSessions() {
         val scout = launch(InMemoryKeyValueStore(), null)
         val s = scout.sessionId

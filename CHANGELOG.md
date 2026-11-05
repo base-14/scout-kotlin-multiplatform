@@ -25,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - **Gauges from sessions sampled out by a user "no" are now exported.** Gauges from sessions sampled out by the `sessionSampleRate` roll are still dropped, as before.
 
+### Fixed
+- **Forwarded logs carry the owner's session.** Logs forwarded by an attached layer (Flutter in delegated mode) kept that layer's own `session.id` and sampling attributes, so they could not be joined to the session the owner exported. The owner's `session.id`, `session.type`, `session.sampled`, `session.sampling_source` and `user.anonymous_id` now win, as they already did for bridged spans.
+
 ## 2026-10-23 — scout-core 0.1.10 · scout-android 0.1.11 · scout-kmp 0.1.13
 
 ### Security
