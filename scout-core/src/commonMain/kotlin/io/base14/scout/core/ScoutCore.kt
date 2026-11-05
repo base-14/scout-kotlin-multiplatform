@@ -460,12 +460,15 @@ class ScoutCore(
                     severityNumber = severityFromInt(l.severityNumber),
                     severityText = l.severityText,
                     attributes = {
+                        // The forwarding layer (e.g. Flutter in delegated mode) may stamp its
+                        // own shadow session; this engine owns the session, so its keys win,
+                        // as they do for bridged spans.
+                        for ((k, v) in l.attributes) if (k !in OWNER_LOG_KEYS) putAny(k, v)
                         setStringAttribute(ScoutAttributes.SESSION_ID, sessionManager.sessionId())
                         setStringAttribute(ScoutAttributes.SESSION_TYPE, "user")
                         for ((k, v) in logSamplingAttrs()) setStringAttribute(k, v)
                         setStringAttribute(ScoutAttributes.USER_ANONYMOUS_ID, identity.anonymousId)
                         identity.userId?.let { setStringAttribute(ScoutAttributes.USER_ID, it) }
-                        for ((k, v) in l.attributes) putAny(k, v)
                     },
                 )
             }
@@ -821,5 +824,14 @@ class ScoutCore(
         const val KEY_ACTIVE_ROOT = "scout.active_root"
         const val KEY_CRASH_EPOCH_MILLIS = "scout.crash_epoch_millis"
         const val REPORTED_CRASH_LIMIT = 50
+
+        /** Session and identity keys a forwarded log may not override. */
+        val OWNER_LOG_KEYS = setOf(
+            ScoutAttributes.SESSION_ID,
+            ScoutAttributes.SESSION_TYPE,
+            ScoutAttributes.SESSION_SAMPLED,
+            ScoutAttributes.SESSION_SAMPLING_SOURCE,
+            ScoutAttributes.USER_ANONYMOUS_ID,
+        )
     }
 }
