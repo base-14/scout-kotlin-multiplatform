@@ -23,6 +23,11 @@ actual object Scout {
         ScoutEngine.setUserSampling(value)
     }
 
+    actual fun setEnabled(value: Boolean) {
+        ScoutEngine.setEnabled(value)
+    }
+    actual val isEnabled: Boolean get() = ScoutEngine.isEnabled
+
     actual fun setSessionAttributes(attributes: Map<String, String>) {
         ScoutEngine.setSessionAttributes(attributes)
     }

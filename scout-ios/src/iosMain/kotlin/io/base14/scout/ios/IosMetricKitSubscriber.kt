@@ -9,6 +9,7 @@ import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUnitDuration
 import platform.Foundation.create
+import platform.Foundation.timeIntervalSince1970
 import platform.MetricKit.MXCrashDiagnostic
 import platform.MetricKit.MXDiagnosticPayload
 import platform.MetricKit.MXHangDiagnostic
@@ -37,6 +38,8 @@ internal object IosMetricKitSubscriber {
         override fun didReceiveDiagnosticPayloads(payloads: List<*>) {
             for (p in payloads) {
                 val payload = p as? MXDiagnosticPayload ?: continue
+                // Diagnostics from a stretch spent disabled are never reported.
+                if (ScoutEngine.occurredWhileDisabled((payload.timeStampBegin.timeIntervalSince1970 * 1000).toLong())) continue
                 payload.crashDiagnostics?.forEach { c ->
                     (c as? MXCrashDiagnostic)?.let { reportCrash(it) }
                 }

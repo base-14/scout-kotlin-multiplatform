@@ -18,6 +18,8 @@ internal class CrashInstrumentation(private val core: ScoutCore) {
     }
 
     private fun report(t: Throwable) {
+        // Crashes while disabled are never persisted, so no later launch replays them.
+        if (!core.isEnabled) return
         val type = t::class.qualifiedName ?: "Throwable"
         val message = t.message?.takeIf { it.isNotBlank() } ?: type
         val stack = t.stackTraceToString()

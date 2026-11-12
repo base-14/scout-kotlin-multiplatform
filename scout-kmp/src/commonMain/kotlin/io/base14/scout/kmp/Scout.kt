@@ -23,6 +23,10 @@ expect object Scout {
     fun clearUser()
     fun setUserSampling(value: Boolean?)
 
+    // Runtime kill switch (initial value: ScoutConfig.enabled; not persisted)
+    fun setEnabled(value: Boolean)
+    val isEnabled: Boolean
+
     // Session / account / feature flags
     fun setSessionAttributes(attributes: Map<String, String>)
     fun clearSessionAttributes()

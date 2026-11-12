@@ -57,6 +57,8 @@ internal object IosCrashReporter {
             val dict = store.reportForID(reportId)?.value ?: continue
             val json = nsDictToJson(dict) ?: continue
             val parsed = parseReport(json) ?: continue
+            // Captured while RUM was disabled: never reported.
+            if (ScoutEngine.crashReportOccurredWhileDisabled(parsed["crash_timestamp"])) continue
             val attrs = LinkedHashMap<String, String>()
             for ((key, value) in parsed) {
                 val mapped = if (key.startsWith("crash_")) "crash." + key.removePrefix("crash_") else key

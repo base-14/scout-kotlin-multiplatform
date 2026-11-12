@@ -28,6 +28,11 @@ actual object Scout {
         AndroidScout.setUserSampling(value)
     }
 
+    actual fun setEnabled(value: Boolean) {
+        AndroidScout.setEnabled(value)
+    }
+    actual val isEnabled: Boolean get() = AndroidScout.isEnabled
+
     actual fun setSessionAttributes(attributes: Map<String, String>) {
         AndroidScout.setSessionAttributes(attributes)
     }

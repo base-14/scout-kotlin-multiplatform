@@ -61,7 +61,7 @@ internal object IosMetricsCollector {
     private fun loop() {
         usleep(1_000_000u)
         while (running.value == 1) {
-            sample()
+            if (ScoutEngine.isEnabled) sample()
             usleep((intervalSeconds * 1_000_000).toUInt())
         }
     }

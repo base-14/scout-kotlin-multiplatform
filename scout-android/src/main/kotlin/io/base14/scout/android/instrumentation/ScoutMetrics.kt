@@ -22,6 +22,10 @@ internal class ScoutMetrics(private val core: ScoutCore) {
             Thread {
                 val runtime = Runtime.getRuntime()
                 while (running) {
+                    if (!core.isEnabled) {
+                        Thread.sleep(intervalMs)
+                        continue
+                    }
                     val screenAttr = mapOf<String, Any>(ScoutAttributes.SCREEN_NAME to (CurrentScreen.name ?: ""))
                     if (memoryOn) {
                         runCatching {

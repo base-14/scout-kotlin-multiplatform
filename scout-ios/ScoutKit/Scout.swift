@@ -44,7 +44,8 @@ public enum Scout {
         frozenFrameThresholdMs: Int = 700,
         maxOfflineStorageMb: Int = 5,
         debugLogging: Bool = false,
-        userSampling: Bool? = nil
+        userSampling: Bool? = nil,
+        enabled: Bool = true
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -85,7 +86,8 @@ public enum Scout {
             frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
             maxOfflineStorageMb: Int32(maxOfflineStorageMb),
             debugLogging: debugLogging,
-            userSampling: userSampling.map { KotlinBoolean(value: $0) }
+            userSampling: userSampling.map { KotlinBoolean(value: $0) },
+            enabled: enabled
         )
 
         if enableAnrTracking {
@@ -132,7 +134,8 @@ public enum Scout {
         frozenFrameThresholdMs: Int = 700,
         maxOfflineStorageMb: Int = 5,
         debugLogging: Bool = false,
-        userSampling: Bool? = nil
+        userSampling: Bool? = nil,
+        enabled: Bool = true
     ) {
         ScoutEngine.shared.configure(
             serviceName: serviceName,
@@ -173,7 +176,8 @@ public enum Scout {
             frozenFrameThresholdMs: Int64(frozenFrameThresholdMs),
             maxOfflineStorageMb: Int32(maxOfflineStorageMb),
             debugLogging: debugLogging,
-            userSampling: userSampling.map { KotlinBoolean(value: $0) }
+            userSampling: userSampling.map { KotlinBoolean(value: $0) },
+            enabled: enabled
         )
         if enableAnrTracking {
             AppHangWatchdog.shared.start(thresholdMs: anrThresholdMs)
@@ -226,6 +230,16 @@ public enum Scout {
     public static func setUserSampling(_ value: Bool?) {
         ScoutEngine.shared.setUserSampling(value: value.map { KotlinBoolean(value: $0) })
     }
+
+    // MARK: Runtime kill switch
+    /// Turns RUM off or on at runtime, e.g. outside working hours. `false` flushes
+    /// what was already recorded, ends the session, then drops everything (errors
+    /// and crashes included) and sends nothing. `true` starts a fresh session.
+    /// Repeating the current value is a no-op. Not persisted: pass `enabled:` to
+    /// `start` on every launch. A call before `start` is held and wins over it.
+    public static func setEnabled(_ value: Bool) { ScoutEngine.shared.setEnabled(value: value) }
+    /// Whether RUM is collecting. `false` before `start`.
+    public static var isEnabled: Bool { ScoutEngine.shared.isEnabled }
 
     // MARK: Session / account / feature flags
     public static func setSessionAttributes(_ attributes: [String: String]) {

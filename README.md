@@ -47,7 +47,7 @@ auto-instrumentation**. For HTTP, add the interceptor to your OkHttp client:
 OkHttpClient.Builder().addInterceptor(ScoutOkHttpInterceptor()).build()
 ```
 
-Optional API: `Scout.setUser`, `clearUser`, `setUserSampling`, `logEvent`, `addBreadcrumb`, `reportError`.
+Optional API: `Scout.setUser`, `clearUser`, `setUserSampling`, `setEnabled`, `logEvent`, `addBreadcrumb`, `reportError`.
 
 ## Sampling
 
@@ -81,6 +81,58 @@ Scout.setUserSampling(false)
   the current session.
 - Every span and log carries `session.sampling_source` = `user` | `fallback`.
 
+## Turning RUM off at runtime
+
+`enabled` is a kill switch your app controls. Use it when RUM should only run at certain times,
+for example during working hours, including when Android's WorkManager wakes your process at night.
+`setUserSampling(false)` is not a substitute: it waits for the next session and still sends logs
+and metrics.
+
+```kotlin
+// Your app owns the schedule. Read it synchronously from your own cache at startup.
+fun inWorkWindow(now: Instant = Instant.now()): Boolean {
+    val shift = scheduleCache.nextOrCurrentShift() ?: return false
+    return now >= shift.start.minus(Duration.ofHours(1)) && now < shift.end
+}
+
+// Application.onCreate (also runs when WorkManager wakes the process at 03:00):
+Scout.initialize(this, ScoutConfig(serviceName = "my-app", endpoint = "…", enabled = inWorkWindow()))
+
+// When the window opens or closes while the process is alive (alarm, worker, schedule refresh):
+Scout.setEnabled(inWorkWindow())
+```
+
+```swift
+Scout.start(serviceName: "my-app", endpoint: "…", enabled: inWorkWindow())
+Scout.setEnabled(false)
+```
+
+From `commonMain` (scout-kmp): `ScoutConfig(enabled = …)`, `Scout.setEnabled(…)`, `Scout.isEnabled`.
+
+- **While disabled nothing leaves the device and nothing is kept for later.** No spans, logs,
+  metrics, errors, crashes or ANRs, even with `alwaysCaptureErrors`. No OTLP request is made, and
+  nothing is written to the offline buffer.
+- **No session is counted.** A launch with `enabled = false` does not create, resume or extend a
+  session, and emits no app-start, cold-start or lifecycle telemetry. `Scout.sessionId` is `null`.
+- **Turning off** flushes what was already recorded, ends the session, then drops everything.
+  Spans still open at that moment are dropped.
+- **Turning on** starts a fresh session (with `session.previous_id` linked), sampled like any new
+  session. Startup metrics are not re-emitted for that process.
+- **Crashes while disabled are never reported**, not on a later launch either. A crash from an
+  earlier enabled run is reported on the next launch that is enabled; if that launch starts disabled,
+  the report is kept until `setEnabled(true)`. (Android: JVM crashes and native crash files are kept;
+  `ApplicationExitInfo` records are read at that point. iOS: KSCrash reports are kept; MetricKit
+  diagnostics delivered while disabled are dropped.)
+- **Not persisted.** Pass `enabled` on every launch. A `setEnabled` call before `initialize` is held
+  and wins over the config value. Repeating the current value is a no-op.
+- `setUser`, user attributes and `setUserSampling` calls while disabled are kept and apply once
+  enabled.
+- With `debugLogging`, the init state and each transition are logged (`SCOUTDBG enabled=…`).
+- Hybrid apps: the owner's `bridgeContext()` carries `scout.enabled`, and attached layers forward
+  their calls with `ScoutBridge.setEnabled` (Android) or `ScoutEngine.setEnabled` (iOS). Each Android
+  process takes its own `enabled` from its own config; it is not propagated across processes yet.
+  The WebView bridge does not follow it yet either.
+
 ## Modules
 
 | Module | What |
@@ -110,6 +162,7 @@ Scout.setUserSampling(false)
 | Facade | `setUser`/`setAccount`/`setFeatureFlag`/`setSessionAttributes`/`addTiming`/`startVital`+`endVital`/`recordOperationStep`/`logEvent`/`addBreadcrumb`/`reportError` | ✅ |
 | Session | UUID, persistence, idle/max rotation, `session.previous_id` | ✅ |
 | Sampling | deterministic FNV-1a, error-class bypass, per-user `userSampling` (see [Sampling](#sampling)) | ✅ |
+| Kill switch | `enabled` / `setEnabled`: nothing exported, no session counted (see [Turning RUM off at runtime](#turning-rum-off-at-runtime)) | ✅ |
 | Transport | OTLP/JSON over Ktor; batch + **crash-durable offline buffering** (persistingSpanProcessor) | ✅ |
 | Resource attrs | os/device/app/arch/locale/tz/network per semantics.md §2; `service.version` auto-detected | ✅ |
 | Hooks | `beforeSend` (PII/drop), feature toggles per signal | ✅ |

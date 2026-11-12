@@ -1,5 +1,6 @@
 package io.base14.scout.ios
 
+import io.base14.scout.core.PendingEnabled
 import io.base14.scout.core.ScoutConfig
 import io.base14.scout.core.ScoutCore
 import io.base14.scout.core.bridge.BridgeCodec
@@ -21,6 +22,9 @@ object ScoutEngine {
     private val processStartNanos = epochNanos()
     private var core: ScoutCore? = null
     private var instrumentation: IosInstrumentation? = null
+
+    /** A [setEnabled] call made before [initialize]; it wins over `ScoutConfig.enabled`. */
+    private val pendingEnabled = PendingEnabled()
 
     // The collector endpoint, exposed so HTTP instrumentation can skip the SDK's own
     // telemetry uploads (otherwise every export is captured as a new http.request → loop).
@@ -80,6 +84,7 @@ object ScoutEngine {
         maxOfflineStorageMb: Int = 5,
         debugLogging: Boolean = false,
         userSampling: Boolean? = null,
+        enabled: Boolean = true,
     ) {
         initialize(
             ScoutConfig(
@@ -122,16 +127,18 @@ object ScoutEngine {
                 maxOfflineStorageMb = maxOfflineStorageMb,
                 debugLogging = debugLogging,
                 userSampling = userSampling,
+                enabled = enabled,
             ),
         )
     }
 
     fun initialize(config: ScoutConfig) {
         if (core != null) return
-        if (config.enableCrashTracking) IosCrashReporter.install()
-        collectorEndpoint = config.endpoint
+        val effective = pendingEnabled.applyTo(config)
+        if (effective.enableCrashTracking) IosCrashReporter.install()
+        collectorEndpoint = effective.endpoint
         val created = ScoutCore(
-            config = config,
+            config = effective,
             store = IosKeyValueStore(),
             httpClient = HttpClient(Darwin),
             platformResourceAttributes = iosResourceAttributes(),
@@ -144,8 +151,28 @@ object ScoutEngine {
             m
         }
         instrumentation = IosInstrumentation(created, processStartNanos).also { it.start() }
-        if (config.enableCrashTracking) runCatching { IosCrashReporter.drainPending() }
+        // Reports from an earlier enabled run wait for an enabled point when this launch starts disabled.
+        if (effective.enableCrashTracking) created.runWhenEnabled { runCatching { IosCrashReporter.drainPending() } }
     }
+
+    /**
+     * Runtime kill switch. `false` flushes what was already recorded, ends the
+     * session and then drops everything (errors and crashes included). `true`
+     * starts a fresh session. Repeating the current value is a no-op. Not
+     * persisted. A call before [initialize] is held and wins over the config.
+     */
+    fun setEnabled(value: Boolean) {
+        val c = core
+        if (c == null) pendingEnabled.hold(value) else c.setEnabled(value)
+    }
+
+    /** Whether RUM is collecting. False before [initialize]. */
+    val isEnabled: Boolean get() = core?.isEnabled ?: false
+
+    internal fun crashReportOccurredWhileDisabled(rawTimestamp: String?): Boolean =
+        core?.crashReportOccurredWhileDisabled(rawTimestamp) ?: false
+
+    internal fun occurredWhileDisabled(epochMillis: Long): Boolean = core?.occurredWhileDisabled(epochMillis) ?: false
 
     private var currentScreenSpan: ScoutCore.ScoutSpan? = null
     private var currentScreenName: String? = null

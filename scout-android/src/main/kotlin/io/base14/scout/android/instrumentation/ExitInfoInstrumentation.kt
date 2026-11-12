@@ -25,6 +25,8 @@ internal class ExitInfoInstrumentation(
             for (info in am.getHistoricalProcessExitReasons(app.packageName, 0, 20)) {
                 if (info.timestamp <= last) continue
                 if (info.timestamp > newest) newest = info.timestamp
+                // The process exited while RUM was disabled: never reported.
+                if (core.occurredWhileDisabled(info.timestamp)) continue
                 when (info.reason) {
                     ApplicationExitInfo.REASON_CRASH_NATIVE ->
                         if (skipNative > 0) {

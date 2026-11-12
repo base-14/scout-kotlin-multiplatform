@@ -17,12 +17,18 @@ class ScoutOtlpJsonLogRecordExporter(
     private val httpClient: HttpClient,
     private val debug: Boolean = false,
     private val maxRetries: Int = 0,
+    /** Checked before every upload; false (RUM disabled) fails the batch without a request. */
+    private val exportAllowed: () -> Boolean = { true },
 ) : LogRecordExporter {
 
     private val url = endpoint.trimEnd('/') + "/v1/logs"
 
     override suspend fun export(telemetry: List<ReadableLogRecord>): OperationResultCode {
         if (telemetry.isEmpty()) return OperationResultCode.Success
+        if (!exportAllowed()) {
+            if (debug) println("SCOUTDBG logs n=${telemetry.size} not sent: disabled")
+            return OperationResultCode.Failure
+        }
         val body = OtlpJsonLogSerializer.serialize(telemetry)
         var attempt = 0
         while (attempt <= maxRetries.coerceAtLeast(0)) {

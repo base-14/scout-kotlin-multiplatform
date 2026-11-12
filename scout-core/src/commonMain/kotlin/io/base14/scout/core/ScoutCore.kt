@@ -69,6 +69,24 @@ class ScoutCore(
     val identity = Identity(store)
     val breadcrumbs = BreadcrumbBuffer(store = store)
 
+    /**
+     * When the previous process left RUM disabled, the moment it was turned off.
+     * Crash reports and exit records from at or after it happened while disabled
+     * and are never replayed. Read before this launch rewrites the marker.
+     */
+    private val disabledSinceAtLaunch: Long? = store.getString(KEY_DISABLED_SINCE)?.toLongOrNull()
+
+    /** Serialises enable/disable transitions and the deferred-until-enabled queue. */
+    private val enableLock = ScoutLock()
+
+    /** Bumped on every transition, so spans started before one are dropped when they end. */
+    @Volatile private var generation = 0
+
+    /** Closed while disabled (after the disable-time flush), so no OTLP request is made at all. */
+    @Volatile private var exportOpen = config.enabled
+
+    private val deferredUntilEnabled = ArrayList<() -> Unit>()
+
     private val resourceAttrs: Map<String, String> = buildResourceAttrs(platformResourceAttributes)
 
     private val flushScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -84,7 +102,13 @@ class ScoutCore(
         tracerProvider {
             export {
                 val exporter =
-                    ScoutOtlpJsonSpanExporter(config.endpoint, exportHeaders(), httpClient, config.debugLogging, config.effectiveMaxRetries)
+                    ScoutOtlpJsonSpanExporter(
+                        config.endpoint,
+                        exportHeaders(),
+                        httpClient,
+                        config.debugLogging,
+                        config.effectiveMaxRetries,
+                    ) { exportOpen }
                 val dir = offlineDir
                 val processor = if (config.offlineBufferEnabled && dir != null) {
                     persistingSpanProcessor(
@@ -117,7 +141,7 @@ class ScoutCore(
                             httpClient,
                             config.debugLogging,
                             config.effectiveMaxRetries,
-                        )
+                        ) { exportOpen }
                     val dir = offlineDir
                     val processor = if (config.offlineBufferEnabled && dir != null) {
                         persistingLogRecordProcessor(
@@ -161,11 +185,20 @@ class ScoutCore(
         exportIntervalSeconds = config.effectiveMetricExportIntervalSeconds,
         maxRetries = config.effectiveMaxRetries,
         debug = config.debugLogging,
+        exportAllowed = { exportOpen },
     )
 
     private val resurrector = SpanResurrector(config.endpoint, exportHeaders(), httpClient)
 
     init {
+        if (config.enabled) {
+            store.remove(KEY_DISABLED_SINCE)
+        } else {
+            markDisabledSince()
+        }
+        if (config.debugLogging) {
+            println("SCOUTDBG enabled=${config.enabled}" + if (config.enabled) "" else " (no session, nothing exported)")
+        }
         val dir = offlineDir
         if (config.offlineBufferEnabled && dir != null) {
             runCatching { systemFileSystem().createDirectories(dir) }
@@ -179,7 +212,108 @@ class ScoutCore(
         }
     }
 
+    /** Whether RUM is currently on. See [setEnabled]. */
+    val isEnabled: Boolean get() = sessionManager.isEnabled
+
+    /**
+     * Runtime kill switch. Turning off flushes what was already recorded (async,
+     * best effort), ends the session, then drops everything: spans, logs,
+     * metrics, errors and crashes, regardless of `alwaysCaptureErrors`. Spans
+     * still open are dropped when they end. Turning on starts a fresh session
+     * with sampling resolved like any new session, then runs the work deferred
+     * with [runWhenEnabled] (e.g. replaying crashes from an earlier enabled
+     * run). Setting the current value is a no-op. Not persisted.
+     */
+    fun setEnabled(value: Boolean) {
+        val deferred = enableLock.withLock {
+            if (value) enableLocked() else disableLocked()
+        }
+        for (block in deferred) runCatching { block() }
+    }
+
+    private fun disableLocked(): List<() -> Unit> {
+        if (!sessionManager.disable()) return emptyList()
+        val gen = ++generation
+        currentRootContext = null
+        clearActiveRoot()
+        attrLock.withLock { vitalStarts.clear() }
+        markDisabledSince()
+        if (config.debugLogging) println("SCOUTDBG enabled=false (session ended, telemetry dropped)")
+        // Flush what was recorded while enabled, then close the gate so nothing else leaves.
+        flushScope.launch {
+            runCatching { spanProcessor?.forceFlush() }
+            runCatching { logProcessor?.forceFlush() }
+            runCatching { metricEmitter.flushNow() }
+            enableLock.withLock { if (generation == gen) exportOpen = false }
+        }
+        return emptyList()
+    }
+
+    private fun enableLocked(): List<() -> Unit> {
+        if (!sessionManager.enable()) return emptyList()
+        generation++
+        exportOpen = true
+        runCatching { store.remove(KEY_DISABLED_SINCE) }
+        if (config.debugLogging) println("SCOUTDBG enabled=true session=${sessionManager.sessionId()}")
+        val deferred = ArrayList(deferredUntilEnabled)
+        deferredUntilEnabled.clear()
+        return deferred
+    }
+
+    /**
+     * Runs [block] now if RUM is on, otherwise at the next [setEnabled] (true).
+     * Used for work that must wait for an enabled point, such as replaying
+     * crash reports kept from an earlier enabled run.
+     */
+    fun runWhenEnabled(block: () -> Unit) {
+        val runNow = enableLock.withLock {
+            if (!isEnabled) deferredUntilEnabled.add(block)
+            isEnabled
+        }
+        if (runNow) block()
+    }
+
+    /**
+     * True when [epochMillis] falls in the stretch the previous process spent
+     * disabled. Crash and exit reports from then must never be replayed.
+     */
+    fun occurredWhileDisabled(epochMillis: Long): Boolean =
+        disabledSinceAtLaunch?.let { epochMillis >= it } ?: false
+
+    /**
+     * [occurredWhileDisabled] for a crash report's raw timestamp (epoch seconds,
+     * millis or micros, as written by the platform crash reporter). When the
+     * previous process ended disabled and the time cannot be read, the report
+     * is treated as disabled-time and dropped.
+     */
+    fun crashReportOccurredWhileDisabled(rawTimestamp: String?): Boolean {
+        if (disabledSinceAtLaunch == null) return false
+        val millis = rawTimestamp?.trim()?.let(::crashTimestampMillis) ?: return true
+        return occurredWhileDisabled(millis)
+    }
+
+    private fun crashTimestampMillis(raw: String): Long? {
+        raw.toLongOrNull()?.let { v ->
+            return when {
+                v >= 100_000_000_000_000L -> v / 1_000 // micros
+                v >= 100_000_000_000L -> v // millis
+                else -> v * 1_000 // seconds
+            }
+        }
+        return raw.toDoubleOrNull()?.let { (it * 1_000).toLong() }
+    }
+
+    private fun markDisabledSince() {
+        // Keep the earliest moment of an unbroken disabled stretch, across launches.
+        runCatching {
+            if (store.getString(KEY_DISABLED_SINCE) == null) {
+                store.putStringDurable(KEY_DISABLED_SINCE, epochMillis().toString())
+            }
+        }
+    }
+
     fun forceFlush() {
+        if (!isEnabled) return
         flushScope.launch {
             runCatching { spanProcessor?.forceFlush() }
             runCatching { logProcessor?.forceFlush() }
@@ -195,7 +329,7 @@ class ScoutCore(
     }
 
     fun emitGauge(name: String, value: Double, unit: String, attributes: Map<String, Any> = emptyMap()) {
-        if (!config.enableMetrics || !sessionManager.allowsLogsAndMetrics()) return
+        if (!isEnabled || !config.enableMetrics || !sessionManager.allowsLogsAndMetrics()) return
         val attrs = LinkedHashMap(attributes)
         attrs[ScoutAttributes.SESSION_ID] = sessionManager.sessionId()
         metricEmitter.emit(listOf(MetricPoint(name, value, unit, attrs, epochNanos())))
@@ -261,6 +395,8 @@ class ScoutCore(
         private val sampled: Boolean,
         private val isRoot: Boolean = false,
     ) {
+        private val startedInGeneration = generation
+
         val traceparent: String
             get() = "00-${span.spanContext.traceId}-${span.spanContext.spanId}-" + if (sampled) "01" else "00"
 
@@ -269,6 +405,8 @@ class ScoutCore(
             attributes: Map<String, Any> = emptyMap(),
             errorMessage: String? = null,
         ) {
+            // Started before a disable (or a disable/enable cycle): never exported.
+            if (!isEnabled || startedInGeneration != generation) return
             for ((k, v) in attributes) span.putAny(k, v)
             if (errorMessage != null) span.setStatus(StatusData.Error(errorMessage))
             span.end(endNanos)
@@ -286,6 +424,7 @@ class ScoutCore(
         startNanos: Long = epochNanos(),
         isClient: Boolean = false,
     ): ScoutSpan? {
+        if (!isEnabled) return null
         val sampled = sessionManager.sampled()
         if (!shouldEmit(name, sampled)) return null
         val all = commonAttributes(sampled).apply { putAll(attributes) }
@@ -300,6 +439,7 @@ class ScoutCore(
     }
 
     fun beginScreen(name: String, attributes: Map<String, Any> = emptyMap(), startNanos: Long = epochNanos()): ScoutSpan? {
+        if (!isEnabled) return null
         val sampled = sessionManager.sampled()
         if (!shouldEmit(name, sampled)) return null
         val all = commonAttributes(sampled).apply { putAll(attributes) }
@@ -320,6 +460,7 @@ class ScoutCore(
         status: StatusData = StatusData.Unset,
         kind: SpanKind = SpanKind.INTERNAL,
     ) {
+        if (!isEnabled) return
         val sampled = sessionManager.sampled()
         if (!shouldEmit(name, sampled)) return
         val all = commonAttributes(sampled).apply { putAll(attributes) }
@@ -367,7 +508,9 @@ class ScoutCore(
 
     fun setUserAttributes(attributes: Map<String, String>) = identity.setUserAttributes(attributes)
 
-    fun setBreadcrumbs(crumbs: List<Pair<String, String>>) = breadcrumbs.setAll(crumbs)
+    fun setBreadcrumbs(crumbs: List<Pair<String, String>>) {
+        if (isEnabled) breadcrumbs.setAll(crumbs)
+    }
 
     @Volatile
     var onBridgeContextChanged: ((io.base14.scout.core.bridge.SessionContext) -> Unit)? = null
@@ -389,6 +532,7 @@ class ScoutCore(
             userId = identity.userId,
             userAttributes = LinkedHashMap(identity.userAttributes),
             sessionAttributes = sessionAttrs,
+            enabled = isEnabled,
         )
     }
 
@@ -411,6 +555,7 @@ class ScoutCore(
     }
 
     fun ingestForwardedSpan(fwd: io.base14.scout.core.bridge.ForwardedSpan) {
+        if (!isEnabled) return
         val sampled = sessionManager.sampled()
         if (!shouldEmit(fwd.name, sampled)) return
         val all = commonAttributes(sampled).apply { for ((k, v) in fwd.attributes) put(k, v) }
@@ -431,17 +576,20 @@ class ScoutCore(
     }
 
     fun ingestForwardedSpans(payloadJson: String) {
+        if (!isEnabled) return
         for (s in io.base14.scout.core.bridge.BridgeCodec.decodeSpans(payloadJson)) {
             runCatching { ingestForwardedSpan(s) }
         }
     }
 
     fun mergeBreadcrumbs(crumbs: List<io.base14.scout.core.bridge.BridgeBreadcrumb>) {
+        if (!isEnabled) return
         val now = isoUtc(epochMillis())
         for (c in crumbs) breadcrumbs.addAt(c.type, c.message, c.time ?: now)
     }
 
     fun replaceBreadcrumbs(crumbs: List<io.base14.scout.core.bridge.BridgeBreadcrumb>) {
+        if (!isEnabled) return
         val now = isoUtc(epochMillis())
         breadcrumbs.replaceAll(crumbs.map { Breadcrumb(it.type, it.message, it.time ?: now) })
     }
@@ -452,7 +600,7 @@ class ScoutCore(
     }
 
     fun ingestForwardedLogs(payloadJson: String) {
-        if (!config.enableLogging) return
+        if (!isEnabled || !config.enableLogging) return
         for (l in io.base14.scout.core.bridge.BridgeCodec.decodeLogs(payloadJson)) {
             runCatching {
                 loggerFor(l.scope).emit(
@@ -476,7 +624,7 @@ class ScoutCore(
     }
 
     fun ingestForwardedMetrics(payloadJson: String) {
-        if (!config.enableMetrics) return
+        if (!isEnabled || !config.enableMetrics) return
         val points =
             io.base14.scout.core.bridge.BridgeCodec.decodeMetrics(payloadJson).map { m ->
                 val attrs = LinkedHashMap<String, Any>(m.attributes)
@@ -496,6 +644,7 @@ class ScoutCore(
     fun addTiming(name: String) = emitSpan("custom_timing", mapOf("timing.name" to name))
 
     fun startVital(name: String) {
+        if (!isEnabled) return
         attrLock.withLock { vitalStarts[name] = epochNanos() }
     }
 
@@ -617,6 +766,8 @@ class ScoutCore(
     }
 
     fun persistCrash(attributes: Map<String, Any>) {
+        // A crash while disabled is never reported, not even on a later enabled launch.
+        if (!isEnabled) return
         val obj = buildJsonObject {
             for ((k, v) in attributes) put(k, v.toString())
             put(KEY_CRASH_EPOCH_MILLIS, epochMillis().toString())
@@ -643,7 +794,9 @@ class ScoutCore(
         store.putStringDurable(KEY_PENDING_CRASH, payload)
     }
 
+    /** Replays crashes persisted by an earlier enabled run. While disabled they are kept for later. */
     fun replayPendingCrash() {
+        if (!isEnabled) return
         val payloads = ArrayList<String>()
         store.getString(KEY_PENDING_CRASH)?.let {
             store.remove(KEY_PENDING_CRASH)
@@ -673,6 +826,7 @@ class ScoutCore(
             }
             attrs[k] = v.jsonPrimitive.content
         }
+        if (persistMillis?.let(::occurredWhileDisabled) == true) return
         val type = attrs[ScoutAttributes.ERROR_TYPE]?.toString()
         val message = attrs[ScoutAttributes.ERROR_MESSAGE]?.toString()
         attrs[ScoutAttributes.ERROR_ID] = randomUuidString()
@@ -713,6 +867,7 @@ class ScoutCore(
     }.getOrNull()
 
     fun resurrectRootSpan() {
+        if (!isEnabled) return
         val raw = store.getString(KEY_ACTIVE_ROOT) ?: return
         store.remove(KEY_ACTIVE_ROOT)
         val snap = runCatching { crashJson.decodeFromString(RootSnapshot.serializer(), raw) }.getOrNull() ?: return
@@ -732,7 +887,7 @@ class ScoutCore(
     }
 
     fun log(level: ScoutLogLevel, message: String, attributes: Map<String, Any> = emptyMap()) {
-        if (!config.enableLogging) return
+        if (!isEnabled || !config.enableLogging) return
         val severity = when (level) {
             ScoutLogLevel.DEBUG -> SeverityNumber.DEBUG
             ScoutLogLevel.INFO -> SeverityNumber.INFO
@@ -813,8 +968,15 @@ class ScoutCore(
         out[ScoutAttributes.SESSION_SAMPLING_SOURCE] = sessionManager.samplingSource().wire
         return out
     }
-    fun addBreadcrumb(type: String, message: String) = breadcrumbs.add(type, message)
+    fun addBreadcrumb(type: String, message: String) {
+        if (isEnabled) breadcrumbs.add(type, message)
+    }
 
+    /**
+     * The current session id. While disabled this is the last (ended) session's
+     * id, or "" if there never was one; it is never exported. Platform getters
+     * with a nullable type return null instead.
+     */
     val sessionId: String get() = sessionManager.sessionId()
     val anonymousId: String get() = identity.anonymousId
     val userId: String? get() = identity.userId
@@ -824,6 +986,7 @@ class ScoutCore(
         const val KEY_ACTIVE_ROOT = "scout.active_root"
         const val KEY_CRASH_EPOCH_MILLIS = "scout.crash_epoch_millis"
         const val REPORTED_CRASH_LIMIT = 50
+        const val KEY_DISABLED_SINCE = "scout.disabled_since"
 
         /** Session and identity keys a forwarded log may not override. */
         val OWNER_LOG_KEYS = setOf(

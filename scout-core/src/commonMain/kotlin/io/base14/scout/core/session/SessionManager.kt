@@ -8,6 +8,7 @@ import io.base14.scout.core.platform.isoUtc
 import io.base14.scout.core.platform.randomUuidString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.Volatile
 
 @Serializable
 data class PersistedSession(
@@ -18,17 +19,30 @@ data class PersistedSession(
     val startIso: String,
     val previousId: String? = null,
     val samplingSource: SamplingSource = SamplingSource.FALLBACK,
+    /** Set when RUM was turned off mid-session; an ended session is never resumed. */
+    val ended: Boolean = false,
 )
 
 class SessionManager(
     private val config: ScoutConfig,
     private val store: KeyValueStore,
     private val clock: () -> Long = ::epochMillis,
+    enabled: Boolean = config.enabled,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = ScoutLock()
     val userSampling = UserSampling(store, config.userSampling)
-    private var session: PersistedSession = restoreOrCreate()
+
+    /**
+     * While false there is no live session: nothing is created, resumed,
+     * rotated, touched or persisted. [sessionId] keeps returning the last known
+     * id (or "" if there never was one), which callers must not export.
+     */
+    @Volatile
+    var isEnabled: Boolean = enabled
+        private set
+
+    private var session: PersistedSession = if (enabled) restoreOrCreate() else peekPersisted()
     private var backgroundedAt: Long? = null
 
     var onSessionChanged: (() -> Unit)? = null
@@ -45,7 +59,13 @@ class SessionManager(
         return create(previousId = null)
     }
 
+    /** Reads the persisted session without extending it, for a launch that starts disabled. */
+    private fun peekPersisted(): PersistedSession =
+        store.getString(KEY)?.let { raw -> runCatching { json.decodeFromString<PersistedSession>(raw) }.getOrNull() }
+            ?: PersistedSession(id = "", startedAt = 0L, lastActive = 0L, sampled = false, startIso = "", ended = true)
+
     private fun isResumable(s: PersistedSession): Boolean {
+        if (s.ended) return false
         val now = clock()
         val withinIdle = now - s.lastActive < config.sessionTimeoutMinutes * 60_000L
         val withinMax = config.maxSessionDurationMinutes == 0 ||
@@ -69,7 +89,8 @@ class SessionManager(
     fun current(): PersistedSession {
         var changed = false
         val result = lock.withLock {
-            if (config.maxSessionDurationMinutes > 0 &&
+            if (isEnabled &&
+                config.maxSessionDurationMinutes > 0 &&
                 clock() - session.startedAt >= config.maxSessionDurationMinutes * 60_000L
             ) {
                 session = create(previousId = session.id)
@@ -97,16 +118,58 @@ class SessionManager(
 
     /** Ends the current session and starts a new one, which resolves its sampling decision again. */
     fun rotate() {
-        lock.withLock { session = create(previousId = session.id) }
-        onSessionChanged?.invoke()
+        val rotated = lock.withLock {
+            if (isEnabled) session = create(previousId = session.id)
+            isEnabled
+        }
+        if (rotated) onSessionChanged?.invoke()
+    }
+
+    /**
+     * Turns sessions off: the current session ends (persisted as ended, so no
+     * later launch resumes it) and nothing is created or extended until
+     * [enable]. Returns false if already disabled.
+     */
+    fun disable(): Boolean {
+        val changed = lock.withLock {
+            if (!isEnabled) return@withLock false
+            isEnabled = false
+            backgroundedAt = null
+            if (session.id.isNotEmpty()) {
+                session = session.copy(lastActive = clock(), ended = true)
+                persist(session)
+            }
+            true
+        }
+        if (changed) onSessionChanged?.invoke()
+        return changed
+    }
+
+    /**
+     * Turns sessions back on with a fresh session (new id, sampling resolved
+     * like any new session, `previous_id` linked to the last known one).
+     * Returns false if already enabled.
+     */
+    fun enable(): Boolean {
+        val changed = lock.withLock {
+            if (isEnabled) return@withLock false
+            session = create(previousId = session.id.takeIf { it.isNotEmpty() })
+            backgroundedAt = null
+            isEnabled = true
+            true
+        }
+        if (changed) onSessionChanged?.invoke()
+        return changed
     }
 
     fun touch(): Unit = lock.withLock {
+        if (!isEnabled) return@withLock
         session = session.copy(lastActive = clock())
         persist(session)
     }
 
     fun onBackground(): Unit = lock.withLock {
+        if (!isEnabled) return@withLock
         backgroundedAt = clock()
         session = session.copy(lastActive = clock())
         persist(session)
@@ -115,6 +178,7 @@ class SessionManager(
     fun onForeground() {
         var changed = false
         lock.withLock {
+            if (!isEnabled) return@withLock
             val bg = backgroundedAt
             if (bg != null && clock() - bg >= config.sessionTimeoutMinutes * 60_000L) {
                 session = create(previousId = session.id)
@@ -134,11 +198,13 @@ class SessionManager(
         source: SamplingSource = SamplingSource.FALLBACK,
     ) {
         lock.withLock {
+            // A disabled engine has no session to replace; a later enable starts its own.
+            if (!isEnabled) return@withLock false
             val now = clock()
             session = PersistedSession(id, now, now, sampled, startIso, session.id, source)
             persist(session)
-        }
-        onSessionChanged?.invoke()
+            true
+        }.let { adopted -> if (adopted) onSessionChanged?.invoke() }
     }
 
     companion object {
