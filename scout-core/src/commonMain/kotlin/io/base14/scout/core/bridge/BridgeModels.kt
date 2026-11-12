@@ -15,6 +15,11 @@ data class SessionContext(
     @SerialName("user.attributes") val userAttributes: Map<String, String> = emptyMap(),
     @SerialName("session.attributes") val sessionAttributes: Map<String, String> = emptyMap(),
     @SerialName("session.sampling_source") val samplingSource: String? = null,
+    /**
+     * Whether the owner's RUM is on. While false the owner exports nothing and
+     * attached layers should not record either. Absent (older owners) means on.
+     */
+    @SerialName("scout.enabled") val enabled: Boolean = true,
 ) {
     fun toAttributes(): Map<String, Any> {
         val out = LinkedHashMap<String, Any>()

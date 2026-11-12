@@ -60,6 +60,14 @@ data class ScoutConfig(
      * Applies from the next session start. See `Scout.setUserSampling`.
      */
     val userSampling: Boolean? = null,
+
+    /**
+     * Whether RUM runs for this launch. `false` is a kill switch: no session is
+     * created or resumed, nothing is exported (errors and crashes included) and
+     * nothing is buffered for later. Not persisted, so pass the value your app
+     * wants on every launch. Flip it at runtime with `Scout.setEnabled`.
+     */
+    val enabled: Boolean = true,
 ) {
     val effectiveExportIntervalSeconds: Int get() = exportIntervalSeconds.coerceAtLeast(1)
     val effectiveMaxExportBatchSize: Int get() = maxExportBatchSize.coerceAtLeast(1)

@@ -8,6 +8,7 @@ import io.base14.scout.android.internal.AndroidKeyValueStore
 import io.base14.scout.android.internal.DeviceResources
 import io.base14.scout.android.internal.ScoutInstrumentation
 import io.base14.scout.android.internal.createScoutHttpClient
+import io.base14.scout.core.PendingEnabled
 import io.base14.scout.core.ScoutConfig
 import io.base14.scout.core.ScoutCore
 import io.base14.scout.core.export.ScoutLogLevel
@@ -21,8 +22,17 @@ object Scout {
     @Volatile
     private var screenTracker: ScreenTracker? = null
 
+    /** A [setEnabled] call made before [initialize]; it wins over `ScoutConfig.enabled`. */
+    private val pendingEnabled = PendingEnabled()
+
     val isInitialized: Boolean get() = core != null
-    val sessionId: String? get() = core?.sessionId
+
+    /** The current session id, or null before [initialize] and while RUM is disabled. */
+    val sessionId: String? get() = core?.takeIf { it.isEnabled }?.sessionId
+
+    /** Whether RUM is collecting. False before [initialize]. See [setEnabled]. */
+    @JvmStatic
+    val isEnabled: Boolean get() = core?.isEnabled ?: false
     val userId: String? get() = core?.userId
 
     val anonymousId: String? get() = core?.identity?.anonymousId
@@ -36,22 +46,47 @@ object Scout {
         synchronized(this) {
             if (core != null) return
             val application = context.applicationContext as Application
+            val effective = pendingEnabled.applyTo(config)
             val created =
                 ScoutCore(
-                    config = config,
+                    config = effective,
                     store = AndroidKeyValueStore(application),
-                    httpClient = createScoutHttpClient(config.effectiveExportIntervalSeconds + 35L),
+                    httpClient = createScoutHttpClient(effective.effectiveExportIntervalSeconds + 35L),
                     platformResourceAttributes = DeviceResources.collect(application),
                     cacheDirPath = application.cacheDir.absolutePath,
                 )
             core = created
-            runCatching { ScoutBridge.resolveOnInit(application, created, config.role) }
-            val tracker = ScreenTracker(created, config.enableScreenTracking)
+            runCatching { ScoutBridge.resolveOnInit(application, created, effective.role) }
+            val tracker = ScreenTracker(created, effective.enableScreenTracking)
             screenTracker = tracker
-            ScoutInstrumentation.installAll(application, created, config, tracker)
-            runCatching { created.replayPendingCrash() }
-            runCatching { created.resurrectRootSpan() }
-            runCatching { ScoutInstrumentation.installExitInfoFallback(application, created, config) }
+            ScoutInstrumentation.installAll(application, created, effective, tracker)
+            // Reports from an earlier enabled run wait for an enabled point when this launch starts disabled.
+            created.runWhenEnabled {
+                runCatching { created.replayPendingCrash() }
+                runCatching { created.resurrectRootSpan() }
+                runCatching { ScoutInstrumentation.installExitInfoFallback(application, created, effective) }
+            }
+        }
+    }
+
+    /**
+     * Runtime kill switch, e.g. to keep RUM off outside working hours. `false`
+     * flushes what was already recorded, ends the session and then drops
+     * everything (errors and crashes included) and sends nothing. `true` starts
+     * a fresh session. Repeating the current value is a no-op. Not persisted:
+     * pass `ScoutConfig.enabled` on every launch. A call before [initialize] is
+     * held and wins over the config value.
+     */
+    @JvmStatic
+    fun setEnabled(value: Boolean) {
+        val current = core
+        if (current != null) {
+            current.setEnabled(value)
+            return
+        }
+        synchronized(this) {
+            val c = core
+            if (c == null) pendingEnabled.hold(value) else c.setEnabled(value)
         }
     }
 

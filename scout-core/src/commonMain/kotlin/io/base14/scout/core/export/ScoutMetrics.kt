@@ -45,6 +45,8 @@ class ScoutMetricEmitter(
     private val exportIntervalSeconds: Int = 30,
     private val maxRetries: Int = 0,
     private val debug: Boolean = false,
+    /** Checked before every upload; false (RUM disabled) drops the buffered points without a request. */
+    private val exportAllowed: () -> Boolean = { true },
 ) {
     private val url = endpoint.trimEnd('/') + "/v1/metrics"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -79,6 +81,9 @@ class ScoutMetricEmitter(
         scope.launch { drainAndSend() }
     }
 
+    /** Sends what is buffered now and returns once it has been sent (or dropped). */
+    suspend fun flushNow() = drainAndSend()
+
     fun shutdown() {
         ticker.cancel()
         scope.launch { drainAndSend() }
@@ -92,6 +97,10 @@ class ScoutMetricEmitter(
                 buffer.clear()
                 b
             }
+        if (!exportAllowed()) {
+            if (debug) println("SCOUTDBG metrics n=${batch.size} not sent: disabled")
+            return
+        }
         val cap = maxExportBatchSize.coerceAtLeast(1)
         var i = 0
         while (i < batch.size) {

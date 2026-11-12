@@ -106,5 +106,18 @@ object ScoutBridge {
         runCatching { core.setUserSampling(value) }
     }
 
+    /**
+     * Entry point for attached layers (e.g. scout-flutter) to forward the app's
+     * runtime kill switch. Unlike [setUserSampling] it also applies in a
+     * non-main process: each process decides its own `enabled`. A call before
+     * `Scout.initialize` is held and applied at init.
+     */
+    fun setEnabled(value: Boolean) {
+        runCatching { Scout.setEnabled(value) }
+    }
+
+    /** Whether the native engine's RUM is on (false before init). */
+    fun isEnabled(): Boolean = Scout.isEnabled
+
     private fun core(): ScoutCore? = Scout.coreInternal()
 }

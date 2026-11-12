@@ -11,6 +11,19 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- **Runtime kill switch: `enabled` / `setEnabled` / `isEnabled`.** Your app can now turn RUM fully off and on in the same process, for example outside working hours, including when WorkManager wakes a background service at night. Pass the initial state with `ScoutConfig(enabled = …)` (Swift: `Scout.start(…, enabled:)`; scout-kmp: the same `ScoutConfig`) and flip it with `Scout.setEnabled(…)`. `setUserSampling(false)` was not enough: it waits for the next session and still sends logs and metrics.
+  - **While disabled nothing leaves the device and nothing is buffered.** No spans, logs, metrics, errors, crashes or ANRs, regardless of `alwaysCaptureErrors`. No OTLP request is made and nothing is written to the offline buffer.
+  - **No session is counted.** A launch with `enabled = false` does not create, resume or extend a session and emits no startup or lifecycle telemetry. Android `Scout.sessionId` returns `null`; the core `sessionId` returns the last ended id, which is never exported.
+  - **Turning off** flushes what was already recorded, ends the session (it is not resumed by a later launch), then drops everything, including spans still open.
+  - **Turning on** starts a fresh session linked by `session.previous_id`, with sampling resolved like any new session.
+  - **Crashes while disabled are never reported later.** JVM crashes are not persisted while disabled. Native crash files, `ApplicationExitInfo` records and KSCrash reports written while disabled are dropped on the next launch (the SDK stores `scout.disabled_since` to tell them apart). A crash from an earlier enabled run waits for the next enabled point.
+  - **Not persisted.** Pass `enabled` on every launch. A `setEnabled` call before init is held and wins over the config value. Repeating the current value is a no-op.
+  - **Hybrid apps.** `bridgeContext()` carries `scout.enabled`. Attached layers forward with `ScoutBridge.setEnabled` on Android or `ScoutEngine.setEnabled` on iOS.
+  - **Follow-ups.** Each Android process takes its own `enabled`; cross-process propagation is not done yet. The WebView bridge does not follow the switch yet.
+
 ## 2026-11-05 — scout-core 0.1.11 · scout-android 0.1.12 · scout-ios 0.1.12 · scout-kmp 0.1.14
 
 ### Added

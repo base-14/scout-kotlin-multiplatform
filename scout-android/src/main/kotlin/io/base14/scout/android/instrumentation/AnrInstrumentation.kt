@@ -47,6 +47,7 @@ internal class AnrInstrumentation(private val core: ScoutCore) {
     }
 
     private fun report(blockedMs: Long) {
+        if (!core.isEnabled) return
         val mainThread = Looper.getMainLooper().thread
         val allStacks = runCatching { Thread.getAllStackTraces() }.getOrDefault(emptyMap())
         val mainStack = (allStacks[mainThread] ?: mainThread.stackTrace).joinToString("\n") { it.toString() }

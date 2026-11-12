@@ -16,12 +16,19 @@ internal class NativeCrashHandler(private val app: Application, private val core
 
     fun install() {
         if (!loaded) return
-        drainPrevious()
+        // Kept until an enabled point when this launch starts disabled.
+        core.runWhenEnabled { drainPrevious() }
         runCatching { nativeInstall(crashFile.absolutePath, imagesFile.absolutePath) }
     }
 
     private fun drainPrevious() {
         if (!crashFile.exists()) return
+        if (core.occurredWhileDisabled(crashFile.lastModified())) {
+            // Written by a crash while RUM was disabled: never reported.
+            runCatching { crashFile.delete() }
+            runCatching { imagesFile.delete() }
+            return
+        }
         val report = runCatching { crashFile.readText() }.getOrNull()
         val images = runCatching { if (imagesFile.exists()) imagesFile.readText() else null }.getOrNull()
         runCatching { crashFile.delete() }
