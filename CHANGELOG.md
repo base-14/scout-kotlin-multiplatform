@@ -11,7 +11,7 @@ Each SDK is published to Maven Central independently via its own tag (`core-`, `
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## 2026-11-13 — scout-core 0.1.12 · scout-android 0.1.13 · scout-ios 0.1.13 · scout-kmp 0.1.15
 
 ### Added
 - **Runtime kill switch: `enabled` / `setEnabled` / `isEnabled`.** Your app can now turn RUM fully off and on in the same process, for example outside working hours, including when WorkManager wakes a background service at night. Pass the initial state with `ScoutConfig(enabled = …)` (Swift: `Scout.start(…, enabled:)`; scout-kmp: the same `ScoutConfig`) and flip it with `Scout.setEnabled(…)`. `setUserSampling(false)` was not enough: it waits for the next session and still sends logs and metrics.
