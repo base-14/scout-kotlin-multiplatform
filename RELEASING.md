@@ -18,8 +18,8 @@ scout.iosVersion=…      # scout-kmp pins this scout-ios
 So a module can only be released after the version it pins is **live on Maven Central**. If you tag
 too early, the publish job fails to resolve the dependency. Worse, it can ship an artifact whose POM
 points at a version that doesn't exist. scout-flutter is one more step down the same chain:
-`android/build.gradle` pins `io.base14:scout-android`, and `ios/scout_flutter/Package.swift` pins
-the `ios-<version>` tag.
+`android/build.gradle` pins `io.base14:scout-android`, `ios/scout_flutter/Package.swift` pins
+the `ios-<version>` tag, and `ios/scout_flutter.podspec` pins the `ScoutKit` pod of the same version.
 
 ```
 scout-core ─▶ scout-android ─┐
@@ -77,7 +77,8 @@ gh workflow run publish-ios.yml -f version=Y         # publish-ios.yml
 
 `publish-ios.yml` is dispatched, not tagged. It builds the xcframework, commits the checksum pin to
 `Package.swift` on `main`, publishes the `scout-ios` klib, then creates the `ios-Y` tag and GitHub
-Release itself. Pull `main` afterwards, because the workflow pushed a commit.
+Release itself. Last, it pushes `ScoutKit.podspec` to CocoaPods trunk, so CocoaPods apps can use the
+release. Pull `main` afterwards, because the workflow pushed a commit.
 
 Wait until `scout-android` Y and `scout-ios` Y are both **live on Maven Central**.
 
@@ -101,6 +102,8 @@ This happens in the scout-flutter repo, after `scout-android` Y is live on Maven
 1. Make one release commit on `main` (`release <version>: pin scout-android Y and scout-ios Y`):
    - `android/build.gradle`: `implementation 'io.base14:scout-android:Y'`
    - `ios/scout_flutter/Package.swift`: `revision: "ios-Y"`
+   - `ios/scout_flutter.podspec`: `s.dependency 'ScoutKit', 'Y'`. Check that `pod trunk info ScoutKit`
+     lists Y first.
    - `pubspec.yaml` `version:` and `lib/src/scope.dart` `kScopeVersion`: the new Flutter version.
      They must match, which `scope_version_sync_test.dart` enforces.
    - `CHANGELOG.md`: turn `## Unreleased` into `## <version>`.
