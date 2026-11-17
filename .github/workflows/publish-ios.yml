@@ -63,9 +63,10 @@ jobs:
           CHECKSUM="${{ steps.xcf.outputs.checksum }}"
           sed -i '' -E "s#url: \"https://github.com/base-14/scout-kotlin-multiplatform/releases/download/[^\"]+\"#url: \"$URL\"#" Package.swift
           sed -i '' -E "s#checksum: \"[a-f0-9]+\"#checksum: \"$CHECKSUM\"#" Package.swift
+          sed -i '' -E "s#^(  s\.version +=) '[^']+'#\1 '$RELEASE_VERSION'#" ScoutKit.podspec
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift
+          git add Package.swift ScoutKit.podspec
           git commit -m "release ${RELEASE_TAG}: pin xcframework checksum" || echo "no change"
           git push origin HEAD:main
 
@@ -94,3 +95,13 @@ jobs:
           gh release create "${RELEASE_TAG}" \
             scout-ios/build/XCFrameworks/release/Scout.xcframework.zip \
             --repo base-14/scout-kotlin-multiplatform --generate-notes
+
+      # Last: CocoaPods. ScoutKit.podspec downloads the Release asset above and checks it against the
+      # Package.swift checksum, so it can only be linted and pushed after the Release exists.
+      # --skip-import-validation: lint's test app would build the x86_64 simulator arch, which the
+      # xcframework does not ship. The pod target itself is still built and validated.
+      # Secret: COCOAPODS_TRUNK_TOKEN (session token of a ScoutKit trunk owner).
+      - name: Publish ScoutKit to CocoaPods trunk
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+        run: pod trunk push ScoutKit.podspec --allow-warnings --skip-import-validation
